@@ -2,7 +2,7 @@
 [@septag](https://twitter.com/septagh)
 
 **glslcc** is a command line tool that converts GLSL (version 4.5) code to HLSL, GLES (version 2.0 and 3.0) and Metal (MSL).  
-It uses [glslang](https://github.com/KhronosGroup/glslang) for parsing and [SPIRV-cross](https://github.com/KhronosGroup/SPIRV-Cross) for converting the code from SPIR-V to the target language.  
+It uses [glslang](https://github.com/KhronosGroup/glslang) for parsing GLSL and compiling SPIR-V. And [SPIRV-cross](https://github.com/KhronosGroup/SPIRV-Cross) for converting the code from SPIR-V to the target language.  
 
 ### Features
 
