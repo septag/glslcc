@@ -109,7 +109,7 @@ glslcc --vert=shader.vert --frag=shader.frag --output=shader.h --lang=hlsl --ref
 
 	Copyright 2018 Sepehr Taghdisian. All rights reserved.
 	
-	https://github.com/septag/sx
+	https://github.com/septag/glslcc
 	
 	Redistribution and use in source and binary forms, with or without
 	modification, are permitted provided that the following conditions are met:
