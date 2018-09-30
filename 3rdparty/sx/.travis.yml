@@ -1,0 +1,34 @@
+language: C
+matrix:
+  include:
+    - compiler: gcc
+      os: linux
+    - compiler: clang
+      os: osx
+
+addons:
+  apt:
+    packages:
+    - gcc
+    - clang
+    - cmake
+    - libglew-dev
+    - libx11-dev
+    - libxrandr-dev
+    - libxi-dev
+
+before_script:
+  - mkdir build
+  - cd build
+  - cmake .. -DCMAKE_BUILD_TYPE=Release
+
+script: make
+
+branches:
+  only:
+    - master
+
+notifications:
+  email: false
+
+osx_image: xcode9.3
