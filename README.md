@@ -23,7 +23,75 @@ The code is portable and other platforms should be built without errors, althoug
 
 ### Usage
 
-_TODO_. for now checkout ```glslcc --help``` for command line options
+I'll have to write a more detailed documentation but for now checkout ```glslcc --help``` for command line options.  
+
+Here's some examples:  
+
+Example shader (write shaders GLSL 4.5) : 
+You can also use ```#include```. The compiler automatically inserts ```#extension GL_GOOGLE_include_directive : require``` at the begining of any shader.  
+
+Vertex Shader (shader.vert):
+
+```glsl
+#version 450
+
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec4 aColor;
+layout (location = 2) in vec2 aCoord;
+
+layout (std140) uniform matrices
+{
+    mat4 projection;
+    mat4 view;
+    mat4 model;
+};
+
+layout (location = 0) out flat vec4 outColor;
+layout (location = 1) out vec2 outCoord;
+
+void main()
+{
+    gl_Position = projection * view * model * vec4(aPos, 1.0);
+    outColor = aColor;
+    outCoord = aCoord;
+}  
+
+```
+
+Fragment shader (shader.frag): 
+
+```glsl
+#version 450
+
+precision mediump float;
+
+layout (location = 0) in flat vec4 inColor;
+layout (location = 1) in vec2 inCoord;
+
+layout (location = 0) out vec4 fragColor;
+
+layout (binding = 0) uniform sampler2D colorMap;
+
+void main() 
+{
+    lowp vec4 c = texture(colorMap, inCoord);
+    fragColor = inColor * c;
+}
+```
+
+Cross-compiles the vertex-shader and fragment-shader to HLSL files with reflection Json data
+Output files will be _shader_vs.hlsl_, _shader_fs.hlsl_ for HLSL code, and _shader_vs.hlsl.json_, _shader_fs.hlsl.json_ for their reflection data.
+
+
+```
+glslcc --vert=shader.vert --frag=shader.frag --output=shader.hlsl --lang=hlsl --reflect
+```
+
+This command does the same thing, but outputs all the data to a C header file *shader.h*, with specified variable names *g_shader_vs*, *g_shader_fs*, *g_shader_vs_refl* and *g_shader_fs_refl* which are the same data in files in hex representation.
+
+```
+glslcc --vert=shader.vert --frag=shader.frag --output=shader.h --lang=hlsl --reflect --cvar=g_shader
+```
 
 ### TODO
 
