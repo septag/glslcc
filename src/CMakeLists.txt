@@ -21,3 +21,7 @@ target_link_libraries(glslcc PRIVATE
         spirv-cross-reflect
         spirv-cross-util 
         spirv-cross-msl)  
+
+install(TARGETS glslcc 
+        CONFIGURATIONS Release
+        RUNTIME DESTINATION bin)

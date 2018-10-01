@@ -18,7 +18,11 @@ It uses [glslang](https://github.com/KhronosGroup/glslang) for parsing GLSL and 
 - Supports both GLES2 and GLES3 shaders
 
 ### Build
-_glslcc_ uses CMake. Currently tested with Visual Studio 2015.  
+_glslcc_ uses CMake. build and tested on: 
+
+- Windows 10 - Microsoft visual studio 2015 Update 3
+- Ubuntu 16.04 - GCC 5.4.0
+  
 The code is portable and other platforms should be built without errors, although I have to test and confirm this.
 
 ### Usage

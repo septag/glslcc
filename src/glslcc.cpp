@@ -7,6 +7,7 @@
 //      1.0.0       Initial release
 //      1.1.0       SGS file support (native binary format that holds all shaders and reflection data)
 //      1.2.0       Added HLSL vertex semantics
+//      1.2.1       Linux build
 //
 #define _ALLOW_KEYWORD_MACROS
 
