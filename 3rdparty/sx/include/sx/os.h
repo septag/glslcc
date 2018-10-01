@@ -2,7 +2,7 @@
 // Copyright 2018 Sepehr Taghdisian (septag@github). All rights reserved.
 // License: https://github.com/septag/sx#license-bsd-2-clause
 //
-// os.h - v1.0 - Common portable OS related functions
+// os.h - v1.1.0 - Common portable OS related functions
 //
 #pragma once
 
@@ -72,3 +72,9 @@ sx_file_info sx_os_stat(const char* filepath);
 #endif
 
 #endif
+
+// 
+// Version history
+//      1.0.0   Initial release
+//      1.1.0   Added path functions, sx_os_path_xxxx
+//

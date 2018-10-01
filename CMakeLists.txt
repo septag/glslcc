@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(glslcross)
+project(glslcc)
 
 
 option(ENABLE_SPVREMAPPER "Enables building of SPVRemapper" ON)

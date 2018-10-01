@@ -6,6 +6,7 @@
 // Version History
 //      1.0.0       Initial release
 //      1.1.0       SGS file support (native binary format that holds all shaders and reflection data)
+//      1.2.0       Added HLSL vertex semantics
 //
 #define _ALLOW_KEYWORD_MACROS
 
@@ -45,7 +46,7 @@
 #include "../3rdparty/sjson/sjson.h"
 
 #define VERSION_MAJOR  1
-#define VERSION_MINOR  0
+#define VERSION_MINOR  2
 #define VERSION_SUB    0
 
 static const sx_alloc* g_alloc = sx_alloc_malloc;
@@ -69,6 +70,71 @@ static const char* k_shader_types[SHADER_LANG_COUNT] = {
     "gles",
     "hlsl",
     "metal"
+};
+
+enum vertex_attribs
+{
+    VERTEX_POSITION = 0,
+    VERTEX_NORMAL,
+    VERTEX_TEXCOORD0,
+    VERTEX_TEXCOORD1,
+    VERTEX_TEXCOORD2,
+    VERTEX_TEXCOORD3,
+    VERTEX_TEXCOORD4,
+    VERTEX_TEXCOORD5,
+    VERTEX_TEXCOORD6,
+    VERTEX_TEXCOORD7,
+    VERTEX_COLOR0,
+    VERTEX_COLOR1,
+    VERTEX_COLOR2,
+    VERTEX_COLOR3,
+    VERTEX_TANGENT,
+    VERTEX_BITANGENT,
+    VERTEX_INDICES,
+    VERTEX_WEIGHTS,
+    VERTEX_ATTRIB_COUNT
+};
+
+static const char* k_attrib_names[VERTEX_ATTRIB_COUNT] = {
+    "POSITION",
+    "NORMAL",
+    "TEXCOORD0",
+    "TEXCOORD1",
+    "TEXCOORD2",
+    "TEXCOORD3",
+    "TEXCOORD4",
+    "TEXCOORD5",
+    "TEXCOORD6",
+    "TEXCOORD7",
+    "COLOR0",
+    "COLOR1",
+    "COLOR2",
+    "COLOR3",
+    "TANGENT",
+    "BINORMAL",
+    "BLENDINDICES",
+    "BLENDWEIGHT"
+};
+
+static int k_attrib_sem_indices[VERTEX_ATTRIB_COUNT] = {
+    0,
+    0,
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    0,
+    1,
+    2,
+    3,
+    0,
+    0,
+    0,
+    0
 };
 
 // Includer
@@ -318,17 +384,24 @@ static void add_defines(glslang::TShader* shader, const cmd_args& args, std::str
     shader->addProcesses(processes);
 }
 
+enum resource_type
+{
+    RES_TYPE_REGULAR = 0,
+    RES_TYPE_SSBO,
+    RES_TYPE_VERTEX_INPUT
+};
+
 static void output_resource_info(sjson_context* jctx, sjson_node* jparent,
                                  const spirv_cross::Compiler& compiler, 
                                  const std::vector<spirv_cross::Resource>& ress,                                 
-                                 bool print_ssbo = false)
+                                 resource_type res_type = RES_TYPE_REGULAR)
 {
 	for (auto &res : ress) {
         sjson_node* jres = sjson_mkobject(jctx);
 
 		auto &type = compiler.get_type(res.type_id);
 
-		if (print_ssbo && compiler.buffer_is_hlsl_counter_buffer(res.id))
+		if (res_type == RES_TYPE_SSBO && compiler.buffer_is_hlsl_counter_buffer(res.id))
 			continue;
 
 		// If we don't have a name, use the fallback for the type instead of the variable
@@ -351,7 +424,7 @@ static void output_resource_info(sjson_context* jctx, sjson_node* jparent,
 		}
 
 	    spirv_cross::Bitset mask;
-		if (print_ssbo)
+		if (res_type == RES_TYPE_SSBO)
 			mask = compiler.get_buffer_block_flags(res.id);
 		else
 			mask = compiler.get_decoration_bitset(res.id);
@@ -365,14 +438,15 @@ static void output_resource_info(sjson_context* jctx, sjson_node* jparent,
             for (auto arr : type.array)
                 arr_sz += arr;
             sjson_put_int(jctx, jres, "array", arr_sz);
-        }
-        
+        }        
 
+        int loc = -1;
 		if (mask.get(spv::DecorationLocation)) {
-			sjson_put_int(jctx, jres, "location", 
-                compiler.get_decoration(res.id, spv::DecorationLocation));
+            loc = compiler.get_decoration(res.id, spv::DecorationLocation);
+			sjson_put_int(jctx, jres, "location", loc);
         }
-		if (mask.get(spv::DecorationDescriptorSet)) {
+
+        if (mask.get(spv::DecorationDescriptorSet)) {
 			sjson_put_int(jctx, jres, "set", 
                 compiler.get_decoration(res.id, spv::DecorationDescriptorSet));
         }
@@ -394,8 +468,13 @@ static void output_resource_info(sjson_context* jctx, sjson_node* jparent,
 				sjson_put_int(jctx, jres, "unsized_array_stride", runtime_array_stride);
 		}
 
+        if (res_type == RES_TYPE_VERTEX_INPUT && loc != -1) {
+            sjson_put_string(jctx, jres, "semantic", k_attrib_names[loc]);
+            sjson_put_int(jctx, jres, "semantic_index", k_attrib_sem_indices[loc]);
+        }
+
 		uint32_t counter_id = 0;
-		if (print_ssbo && compiler.buffer_get_hlsl_counter_buffer(res.id, counter_id))
+		if (res_type == RES_TYPE_SSBO && compiler.buffer_get_hlsl_counter_buffer(res.id, counter_id))
 			sjson_put_int(jctx, jres, "hlsl_counter_buffer_id", counter_id);
 
         sjson_append_element(jparent, jres);
@@ -420,7 +499,8 @@ static void output_reflection(const cmd_args& args, const spirv_cross::Compiler&
     if (!ress.subpass_inputs.empty())
         output_resource_info(jctx, sjson_put_array(jctx, jshader, "subpass_inputs"), compiler, ress.subpass_inputs);
     if (!ress.stage_inputs.empty())
-        output_resource_info(jctx, sjson_put_array(jctx, jshader, "inputs"), compiler, ress.stage_inputs);
+        output_resource_info(jctx, sjson_put_array(jctx, jshader, "inputs"), compiler, ress.stage_inputs, 
+            (stage == EShLangVertex) ? RES_TYPE_VERTEX_INPUT : RES_TYPE_REGULAR);
     if (!ress.stage_outputs.empty())
         output_resource_info(jctx, sjson_put_array(jctx, jshader, "outputs"), compiler, ress.stage_outputs);
     if (!ress.sampled_images.empty())
@@ -432,7 +512,7 @@ static void output_reflection(const cmd_args& args, const spirv_cross::Compiler&
     if (!ress.storage_images.empty())
         output_resource_info(jctx, sjson_put_array(jctx, jshader, "storage_images"), compiler, ress.storage_images);
     if (!ress.storage_buffers.empty())
-        output_resource_info(jctx, sjson_put_array(jctx, jshader, "storage_buffers"), compiler, ress.storage_buffers);
+        output_resource_info(jctx, sjson_put_array(jctx, jshader, "storage_buffers"), compiler, ress.storage_buffers, RES_TYPE_SSBO);
     if (!ress.uniform_buffers.empty())
         output_resource_info(jctx, sjson_put_array(jctx, jshader, "uniform_buffers"), compiler, ress.uniform_buffers);
     if (!ress.push_constant_buffers.empty())
@@ -522,11 +602,8 @@ static int cross_compile(const cmd_args& args, std::vector<uint32_t>& spirv,
     try {
         std::unique_ptr<spirv_cross::CompilerGLSL> compiler;
         // Use spirv-cross to convert to other types of shader
-        //spirv_cross::CompilerGLSL* compiler = new (sx_malloc(g_alloc, sizeof(spirv_cross::Compiler))) 
-        //    spirv_cross::CompilerGLSL(spirv);
         if (args.lang == SHADER_LANG_GLES) {
             compiler = std::unique_ptr<spirv_cross::CompilerGLSL>(new spirv_cross::CompilerGLSL(spirv));
-    
         } else if (args.lang == SHADER_LANG_METAL) {
             compiler = std::unique_ptr<spirv_cross::CompilerMSL>(new spirv_cross::CompilerMSL(spirv));
         } else if (args.lang == SHADER_LANG_HLSL) {
@@ -571,7 +648,19 @@ static int cross_compile(const cmd_args& args, std::vector<uint32_t>& spirv,
 
         compiler->set_common_options(opts);
 
-        std::string code = compiler->compile();
+        std::string code;
+        // Prepare vertex attribute remap for HLSL
+        if (args.lang == SHADER_LANG_HLSL) {
+            std::vector<spirv_cross::HLSLVertexAttributeRemap> remaps;
+            for (int i = 0; i < VERTEX_ATTRIB_COUNT; i++) {
+                spirv_cross::HLSLVertexAttributeRemap remap = {(uint32_t)i , k_attrib_names[i]};
+                remaps.push_back(std::move(remap));
+            }
+
+            code = ((spirv_cross::CompilerHLSL*)compiler.get())->compile(std::move(remaps));
+        } else {
+            code = compiler->compile();
+        }
 
         // Output code
         if (g_sgs) {
@@ -695,9 +784,26 @@ static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
     EShMessages messages = EShMsgDefault;
     int default_version = 100; // 110 for desktop
 
+    // construct semantics mapping defines
+    // to be used in layout(location = SEMANTIC) inside GLSL
+    std::string semantics_def;
+    for (int i = 0; i < VERTEX_ATTRIB_COUNT; i++) {
+        char sem_line[128];
+        sx_snprintf(sem_line, sizeof(sem_line), "#define %s %d\n", k_attrib_names[i], i);
+        semantics_def += std::string(sem_line);
+    }
+
+    // Add SV_Target semantics for more HLSL compatibility
+    for (int i = 0; i < 8; i++) {
+        char sv_target_line[128];
+        sx_snprintf(sv_target_line, sizeof(sv_target_line), "#define SV_Target%d %d\n", i, i);
+        semantics_def += std::string(sv_target_line);
+    }
+
     for (int i = 0; i < sx_array_count(files); i++) {
         // Always set include_directive in the preamble, because we may need to include shaders
         std::string def("#extension GL_GOOGLE_include_directive : require\n");
+        def += semantics_def;
 
         // Read target file
         sx_mem_block* mem = sx_file_load_bin(g_alloc, files[i].filename);

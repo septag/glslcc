@@ -35,9 +35,9 @@ Vertex Shader (shader.vert):
 ```glsl
 #version 450
 
-layout (location = 0) in vec3 aPos;
-layout (location = 1) in vec4 aColor;
-layout (location = 2) in vec2 aCoord;
+layout (location = POSITION) in vec3 aPos;
+layout (location = COLOR0) in vec4 aColor;
+layout (location = TEXCOORD0) in vec2 aCoord;
 
 layout (std140) uniform matrices
 {
@@ -46,8 +46,8 @@ layout (std140) uniform matrices
     mat4 model;
 };
 
-layout (location = 0) out flat vec4 outColor;
-layout (location = 1) out vec2 outCoord;
+layout (location = COLOR0) out flat vec4 outColor;
+layout (location = TEXCOORD0) out vec2 outCoord;
 
 void main()
 {
@@ -65,10 +65,10 @@ Fragment shader (shader.frag):
 
 precision mediump float;
 
-layout (location = 0) in flat vec4 inColor;
-layout (location = 1) in vec2 inCoord;
+layout (location = COLOR0) in flat vec4 inColor;
+layout (location = TEXCOORD0) in vec2 inCoord;
 
-layout (location = 0) out vec4 fragColor;
+layout (location = SV_Target0) out vec4 fragColor;
 
 layout (binding = 0) uniform sampler2D colorMap;
 
@@ -91,6 +91,17 @@ This command does the same thing, but outputs all the data to a C header file *s
 
 ```
 glslcc --vert=shader.vert --frag=shader.frag --output=shader.h --lang=hlsl --reflect --cvar=g_shader
+```
+
+#### HLSL semantics
+
+As you can see in the above example, I have used HLSL shader semantics for input and output layout. This must done for compatibility with HLSL shaders and also proper vertex assembly creation in D3D application. The reflection data also emits proper semantics for each vertex input for the application.  
+Here are supported HLSL semantics that you should use with ```layout (location = SEMANTIC)```:
+
+```
+POSITION, NORMAL, TEXCOORD0, TEXCOORD1, TEXCOORD2, TEXCOORD3, TEXCOORD4, TEXCOORD5, TEXCOORD6, TEXCOORD7, COLOR0, COLOR1, COLOR2, COLOR3, TANGENT, BINORMAL, BLENDINDICES, BLENDWEIGHT
+
+SV_Target0, SV_Target1, SV_Target2, SV_Target3
 ```
 
 ### TODO
