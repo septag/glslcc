@@ -32,21 +32,21 @@ enum sgs_shader_stage
 
 struct sgs_file_stage
 {
-    int stage;
-    int code_size;
-    int code_offset;
-    int reflect_size;
-    int reflect_offset;
+    int stage;                      // sgs_shader_stage
+    int code_size;                  // code size in bytes
+    int code_offset;                // begining of the code data
+    int reflect_size;               // reflect size in bytes
+    int reflect_offset;             // begining of the reflection data
 };
 
 struct sgs_file_header
 {
-    uint32_t        sig;
-    int             version;
-    int             lang;            
-    int             profile_ver;
-    int             num_stages;
-    // sgs_file_stage* stages;
+    uint32_t        sig;            // SGS_FILE_SIG
+    int             version;        // SGS_FILE_VERSION
+    int             lang;           // sgs_shader_lang
+    int             profile_ver;    // shader profile version
+    int             num_stages;     // number of stages (fs + vs + cs ..)
+    //                              // sgs_file_stage* (num_stages)
 };
 
 #pragma pack(pop)

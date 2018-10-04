@@ -108,6 +108,10 @@ POSITION, NORMAL, TEXCOORD0, TEXCOORD1, TEXCOORD2, TEXCOORD3, TEXCOORD4, TEXCOOR
 SV_Target0, SV_Target1, SV_Target2, SV_Target3
 ```
 
+### SGK file format
+
+There is also an option for exporting to .sgs files *(--sgs)* which is a simple binary format to hold all shaders (vs + fs + cs) with their reflection inside a binary blob. Check out ```sgs-file.h``` for the file format. It starts with the header *sgs_file_header*, following with an array of *sgs_file_stage* structs. Then you can determine the data offsets and size of code and reflection of each shader stage in the file.
+
 ### TODO
 
 - More documentation

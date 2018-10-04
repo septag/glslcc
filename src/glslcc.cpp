@@ -8,6 +8,7 @@
 //      1.1.0       SGS file support (native binary format that holds all shaders and reflection data)
 //      1.2.0       Added HLSL vertex semantics
 //      1.2.1       Linux build
+//      1.2.2       shader filename fix
 //
 #define _ALLOW_KEYWORD_MACROS
 
@@ -48,7 +49,7 @@
 
 #define VERSION_MAJOR  1
 #define VERSION_MINOR  2
-#define VERSION_SUB    0
+#define VERSION_SUB    2
 
 static const sx_alloc* g_alloc = sx_alloc_malloc;
 static sgs_file* g_sgs         = nullptr;
@@ -533,7 +534,7 @@ static void output_reflection(const cmd_args& args, const spirv_cross::Compiler&
 
 // if binary_size > 0, then we assume the data is binary
 static bool write_file(const char* filepath, const char* data, const char* cvar, 
-                            bool append = false, int binary_size = -1)
+                       bool append = false, int binary_size = -1)
 {
     sx_file_writer writer;
     if (!sx_file_open_writer(&writer, filepath, append ? SX_FILE_OPEN_APPEND : 0))
