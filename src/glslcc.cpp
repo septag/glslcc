@@ -836,7 +836,6 @@ static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
                 puts("-------------------");
                 puts(prep_str.c_str());
                 puts("");
-                sx_mem_destroy_block(mem);
             } else {
                 const char* info_log = shader->getInfoLog();
                 const char* info_log_dbg = shader->getInfoDebugLog();

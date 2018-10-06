@@ -27,10 +27,10 @@
 sx_mem_block* sx_mem_create_block(const sx_alloc* alloc, int size, const void* data, int align)
 {
     align = sx_max(align, SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT);
-    sx_mem_block* mem = (sx_mem_block*)sx_malloc(alloc, size + sizeof(sx_mem_block) + align);
+    sx_mem_block* mem = (sx_mem_block*)sx_malloc(alloc, sizeof(sx_mem_block) + size + align);
     if (mem) {
         mem->alloc = alloc;
-        mem->data = sx_align_ptr(mem + 1, 0, align);
+        mem->data = sx_align_ptr(mem, sizeof(sx_mem_block), align);
         mem->size = size;
         mem->align = align;
         if (data)
@@ -48,7 +48,6 @@ void sx_mem_destroy_block(sx_mem_block* mem)
     
     if (mem->alloc) {
         sx_free(mem->alloc, mem);
-        mem->alloc = NULL;
     }
 }
 
