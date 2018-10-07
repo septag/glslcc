@@ -56,5 +56,6 @@ struct sgs_file;
 sgs_file* sgs_create_file(const sx_alloc* alloc, const char* filepath, sgs_shader_lang lang, int profile_ver);
 void      sgs_destroy_file(sgs_file* f);
 void      sgs_add_stage_code(sgs_file* f, sgs_shader_stage stage, const char* code);
+void      sgs_add_stage_code_bin(sgs_file* f, sgs_shader_stage stage, const void* bytecode, int len);
 void      sgs_add_stage_reflect(sgs_file* f, sgs_shader_stage stage, const char* reflect);
 bool      sgs_commit(sgs_file* f);

@@ -9,7 +9,9 @@
 //      1.2.0       Added HLSL vertex semantics
 //      1.2.1       Linux build
 //      1.2.2       shader filename fix
-//
+//      1.2.3       memory corruption fix
+//      1.3.0       D3D11 compiler for windows
+//      
 #define _ALLOW_KEYWORD_MACROS
 
 #include "sx/cmdline.h"
@@ -36,6 +38,11 @@
 
 #include "config.h"
 #include "sgs-file.h"
+
+#ifdef D3D11_COMPILER 
+#   include <d3dcompiler.h>
+#   define BYTECODE_COMPILATION
+#endif
 
 // sjson
 #define sjson_malloc(user, size)        sx_malloc((const sx_alloc*)user, size)
@@ -225,6 +232,7 @@ struct cmd_args
     int         flatten_ubos;
     int         sgs_file;
     int         reflect;
+    int         compile_bin;
     const char* cvar;
     const char* reflect_filepath;
 };
@@ -308,6 +316,54 @@ static void parse_defines(cmd_args* args, const char* defines)
     }
 #endif
 }
+
+#ifdef D3D11_COMPILER
+static sx_mem_block* compile_binary(const char* code, const char* filename, 
+                                    int profile_version, EShLanguage stage)
+{
+    ID3DBlob* output = NULL;
+    ID3DBlob* errors = NULL;
+
+    int major_ver = profile_version / 10;
+    int minor_ver = profile_version % 10;
+    char target[32];
+    switch (stage) {
+    case EShLangVertex:
+        sx_snprintf(target, sizeof(target), "vs_%d_%d", major_ver, minor_ver);      break;
+    case EShLangFragment:
+        sx_snprintf(target, sizeof(target), "ps_%d_%d", major_ver, minor_ver);      break;
+    case EShLangCompute:
+        sx_snprintf(target, sizeof(target), "cs_%d_%d", major_ver, minor_ver);      break;
+    }
+
+    HRESULT hr = D3DCompile(
+        code,                           /* pSrcData */
+        sx_strlen(code),                /* SrcDataSize */
+        filename,                       /* pSourceName */
+        NULL,                           /* pDefines */
+        NULL,                           /* pInclude */
+        "main",                         /* pEntryPoint */
+        target,                         /* pTarget (vs_5_0 or ps_5_0) */
+        D3DCOMPILE_OPTIMIZATION_LEVEL3, /* Flags1 */
+        0,                              /* Flags2 */
+        &output,                        /* ppCode */
+        &errors);                       /* ppErrorMsgs */
+        
+    if (FAILED(hr)) {
+        if (errors) {
+            puts((LPCSTR)errors->GetBufferPointer());
+            errors->Release(); 
+        }
+        return nullptr;
+    }
+
+    sx_mem_block* mem = sx_mem_create_block(g_alloc, 
+                                            (int)output->GetBufferSize(),
+                                            output->GetBufferPointer());
+    output->Release();                                
+    return mem;
+}
+#endif
 
 static void cleanup_args(cmd_args* args)
 {
@@ -672,7 +728,22 @@ static int cross_compile(const cmd_args& args, std::vector<uint32_t>& spirv,
             case EShLangFragment:       sstage = SGS_STAGE_FRAGMENT;    break;
             case EShLangCompute:        sstage = SGS_STAGE_COMPUTE;     break;
             }    
-            sgs_add_stage_code(g_sgs, sstage, code.c_str());
+
+            if (args.compile_bin) {
+#ifdef BYTECODE_COMPILATION
+                sx_mem_block* mem = compile_binary(code.c_str(), args.out_filepath, args.profile_ver, stage);
+                if (!mem) {
+                    printf("Bytecode compilation of '%s' failed\n", args.out_filepath);
+                    return -1;
+                }    
+
+                sgs_add_stage_code_bin(g_sgs, sstage, mem->data, mem->size);
+                sx_mem_destroy_block(mem);
+#endif
+            } else {
+                sgs_add_stage_code(g_sgs, sstage, code.c_str());
+            }
+
 
             std::string json_str;
             output_reflection(args, *compiler, ress, args.out_filepath, stage, &json_str);
@@ -692,10 +763,28 @@ static int cross_compile(const cmd_args& args, std::vector<uint32_t>& spirv,
             }
             bool append = !cvar_code.empty() & (file_index > 0);
 
-            // output code file
-            if (!write_file(filepath.c_str(), code.c_str(), cvar_code.c_str(), append)) {
-                printf("Writing to '%s' failed", filepath.c_str());
-                return -1;
+            // Check if we have to compile byte-code or output the source only
+            if (args.compile_bin) {
+#ifdef BYTECODE_COMPILATION
+                sx_mem_block* mem = compile_binary(code.c_str(), filepath.c_str(), args.profile_ver, stage);
+                if (!mem) {
+                    printf("Bytecode compilation of '%s' failed\n", filepath.c_str());
+                    return -1;
+                }
+
+                if (!write_file(filepath.c_str(), (const char*)mem->data, cvar_code.c_str(), append, mem->size)) {
+                    printf("Writing to '%s' failed\n", filepath.c_str());
+                    return -1;
+                }
+
+                sx_mem_destroy_block(mem);
+#endif
+            } else {
+                // output code file
+                if (!write_file(filepath.c_str(), code.c_str(), cvar_code.c_str(), append)) {
+                    printf("Writing to '%s' failed\n", filepath.c_str());
+                    return -1;
+                }
             }
 
             if (args.reflect) {
@@ -930,6 +1019,7 @@ int main(int argc, char* argv[])
         {"flatten-ubos", 'F', SX_CMDLINE_OPTYPE_FLAG_SET, &args.flatten_ubos, 1, "Flatten UBOs, useful for ES2 shaders", 0x0},
         {"reflect", 'r', SX_CMDLINE_OPTYPE_OPTIONAL, 0x0, 'r', "Output shader reflection information to a json file", "Filepath"},
         {"sgs", 'G', SX_CMDLINE_OPTYPE_FLAG_SET, &args.sgs_file, 1, "Output file should be packed SGS format", "Filepath"},
+        {"bin", 'b', SX_CMDLINE_OPTYPE_FLAG_SET, &args.compile_bin, 1, "Compile to bytecode instead of source. requires ENABLE_D3D11_COMPILER for HLSL", 0x0},
         SX_CMDLINE_OPT_END
     };
     sx_cmdline_context* cmdline = sx_cmdline_create_context(g_alloc, argc, (const char**)argv, opts);
@@ -1011,6 +1101,26 @@ int main(int argc, char* argv[])
         else if (args.lang == SHADER_LANG_HLSL)
             args.profile_ver = 50;
     }
+
+#if SX_PLATFORM_WINDOWS 
+    if (args.compile_bin && (args.lang != SHADER_LANG_HLSL || args.profile_ver >= 60)) {
+        puts("ignoring --bin flag, byte-code compilation not implemented for this target");
+        args.compile_bin = 0;
+    } 
+#   ifndef D3D11_COMPILER
+    // Windoes + HLSL -> works but requires ENABLE_D3D11_COMPILER
+    else if (args.compile_bin) {
+        puts("Cannot compile to byte-code, set ENABLE_D3D11_COMPILER flag in cmake settings");
+        exit(-1);
+    }
+#   endif    
+#else
+    if (args.compile_bin) {
+        puts("ignoring --bin flag, byte-code compilation not implemented for this target");
+        args.compile_bin = 0;
+    }
+#endif
+
 
     if (args.sgs_file && !args.preprocess) {
         sgs_shader_lang slang;

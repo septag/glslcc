@@ -16,6 +16,7 @@ It uses [glslang](https://github.com/KhronosGroup/glslang) for parsing GLSL and 
 - Can output to individual files
 - Can output all pipeline shaders (vertex+fragment) and their reflection data to .c file variables
 - Supports both GLES2 and GLES3 shaders
+- optional D3D11 byte code output for HLSL shaders
 
 ### Build
 _glslcc_ uses CMake. build and tested on: 
@@ -112,10 +113,13 @@ SV_Target0, SV_Target1, SV_Target2, SV_Target3
 
 There is also an option for exporting to .sgs files *(--sgs)* which is a simple binary format to hold all shaders (vs + fs + cs) with their reflection inside a binary blob. Check out ```sgs-file.h``` for the file format. It starts with the header *sgs_file_header*, following with an array of *sgs_file_stage* structs. Then you can determine the data offsets and size of code and reflection of each shader stage in the file.
 
+
+### D3D11 Compiler
+There is a support for compiling d3d11 shaders (ps_5_0, vs_5_0, cs_5_0) into D3D11 byte-code intead of HLSL source code. On windows with Windows SDK, set ```ENABLE_D3D11_COMPILER=ON``` flag for cmake, build the project and use ```--bin``` in the command line arguments to generate binary byte-code file.
+
 ### TODO
 
 - More documentation
-- Support for offline compiling of HLSL files (D3DCompiler)
 - LZ4 compression for SGS binary files
 - Support for more shader stages. I didn't have any use for geometry and tesselation shaders, but the _glslang_ supports all of them, so adding new shader stages shouldn't be a problem
 

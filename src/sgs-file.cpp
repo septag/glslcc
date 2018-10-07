@@ -70,6 +70,32 @@ void sgs_add_stage_code(sgs_file* f, sgs_shader_stage stage, const char* code)
     f->code_block_size += len;
 }
 
+void sgs_add_stage_code_bin(sgs_file* f, sgs_shader_stage stage, const void* bytecode, int len)
+{
+    sx_assert(len > 0);
+
+    sgs_file_stage* s = nullptr;
+    // search in stages and see if find it
+    for (int i = 0; i < sx_array_count(f->stages); i++) {
+        if (f->stages[i].stage == (int)stage) {
+            s = &f->stages[i];
+            break;
+        }
+    }
+
+    if (!s) {
+        s = sx_array_add(f->alloc, f->stages, 1);
+        sx_memset(s, 0x0, sizeof(sgs_file_stage));
+        s->stage = stage;
+    }
+
+    f->code_block = (char*)sx_realloc(f->alloc, f->code_block, f->code_block_size + len);
+    s->code_offset = f->code_block_size;
+    
+    sx_memcpy(f->code_block + s->code_offset, bytecode, len);
+    f->code_block_size += len;
+}
+
 void sgs_add_stage_reflect(sgs_file* f, sgs_shader_stage stage, const char* reflect)
 {
     sgs_file_stage* s = nullptr;

@@ -9,6 +9,7 @@ option(ENABLE_NV_EXTENSIONS "Enables support of Nvidia-specific extensions" ON)
 option(ENABLE_HLSL "Enables HLSL input support" OFF)
 option(ENABLE_OPT "Enables spirv-opt capability if present" ON)
 option(USE_CCACHE "Use ccache" OFF)
+option(ENABLE_D3D11_COMPILER "Use Direct3D11 compiler (d3dcompiler.lib + d3dcompiler_47.dll)" OFF)
 
 set(SX_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 

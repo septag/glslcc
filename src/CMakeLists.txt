@@ -7,6 +7,7 @@ set(SOURCE_FILES "glslcc.cpp"
                  "sgs-file.cpp")
 
 add_executable(glslcc ${SOURCE_FILES})
+
 target_link_libraries(glslcc PRIVATE 
         sx
         glslang 
@@ -21,6 +22,12 @@ target_link_libraries(glslcc PRIVATE
         spirv-cross-reflect
         spirv-cross-util 
         spirv-cross-msl)  
+
+if (ENABLE_D3D11_COMPILER AND MSVC)
+        add_definitions(-DD3D11_COMPILER)    
+        target_link_libraries(glslcc PRIVATE d3dcompiler)    
+endif()
+
 
 install(TARGETS glslcc 
         CONFIGURATIONS Release
