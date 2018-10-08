@@ -11,7 +11,8 @@
 //      1.2.2       shader filename fix
 //      1.2.3       memory corruption fix
 //      1.3.0       D3D11 compiler for windows
-//      
+//      1.3.1       Added -g for byte-code compiler flags
+//
 #define _ALLOW_KEYWORD_MACROS
 
 #include "sx/cmdline.h"
@@ -55,8 +56,8 @@
 #include "../3rdparty/sjson/sjson.h"
 
 #define VERSION_MAJOR  1
-#define VERSION_MINOR  2
-#define VERSION_SUB    2
+#define VERSION_MINOR  3
+#define VERSION_SUB    1
 
 static const sx_alloc* g_alloc = sx_alloc_malloc;
 static sgs_file* g_sgs         = nullptr;
@@ -71,14 +72,14 @@ enum shader_lang
 {
     SHADER_LANG_GLES = 0,
     SHADER_LANG_HLSL,
-    SHADER_LANG_METAL,
+    SHADER_LANG_MSL,
     SHADER_LANG_COUNT
 };
 
 static const char* k_shader_types[SHADER_LANG_COUNT] = {
     "gles",
     "hlsl",
-    "metal"
+    "msl"
 };
 
 enum vertex_attribs
@@ -233,6 +234,7 @@ struct cmd_args
     int         sgs_file;
     int         reflect;
     int         compile_bin;
+    int         debug_bin;
     const char* cvar;
     const char* reflect_filepath;
 };
@@ -258,6 +260,9 @@ static void print_help(sx_cmdline_context* ctx)
 
 static shader_lang parse_shader_lang(const char* arg) 
 {
+    if (sx_strequalnocase(arg, "metal"))
+        arg = "msl";
+
     for (int i = 0; i < SHADER_LANG_COUNT; i++) {
         if (sx_strequalnocase(k_shader_types[i], arg)) {
             return (shader_lang)i;
@@ -319,7 +324,7 @@ static void parse_defines(cmd_args* args, const char* defines)
 
 #ifdef D3D11_COMPILER
 static sx_mem_block* compile_binary(const char* code, const char* filename, 
-                                    int profile_version, EShLanguage stage)
+                                    int profile_version, EShLanguage stage, int debug)
 {
     ID3DBlob* output = NULL;
     ID3DBlob* errors = NULL;
@@ -336,6 +341,12 @@ static sx_mem_block* compile_binary(const char* code, const char* filename,
         sx_snprintf(target, sizeof(target), "cs_%d_%d", major_ver, minor_ver);      break;
     }
 
+    uint32_t compile_flags;
+    if (!debug)
+        compile_flags = D3DCOMPILE_OPTIMIZATION_LEVEL3;
+    else 
+        compile_flags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+
     HRESULT hr = D3DCompile(
         code,                           /* pSrcData */
         sx_strlen(code),                /* SrcDataSize */
@@ -344,7 +355,7 @@ static sx_mem_block* compile_binary(const char* code, const char* filename,
         NULL,                           /* pInclude */
         "main",                         /* pEntryPoint */
         target,                         /* pTarget (vs_5_0 or ps_5_0) */
-        D3DCOMPILE_OPTIMIZATION_LEVEL3, /* Flags1 */
+        compile_flags,                  /* Flags1 */
         0,                              /* Flags2 */
         &output,                        /* ppCode */
         &errors);                       /* ppErrorMsgs */
@@ -550,6 +561,10 @@ static void output_reflection(const cmd_args& args, const spirv_cross::Compiler&
     sjson_node* jroot = sjson_mkobject(jctx);
     sjson_put_string(jctx, jroot, "language", k_shader_types[args.lang]);
     sjson_put_int(jctx, jroot, "profile_version", args.profile_ver);
+    if (args.compile_bin)
+        sjson_put_bool(jctx, jroot, "bytecode", true);
+    if (args.debug_bin)
+        sjson_put_bool(jctx, jroot, "debug_info", true);
 
     sjson_node* jshader = sjson_put_obj(jctx, jroot, get_stage_name(stage));
     sjson_put_string(jctx, jshader, "file", filename);
@@ -626,9 +641,9 @@ static bool write_file(const char* filepath, const char* data, const char* cvar,
 
         for (int i = 0; i < len; i++) {
             if (i != len - 1) {
-                sx_snprintf(hex, sizeof(hex), "0x%02x, ", data[i]);
+                sx_snprintf(hex, sizeof(hex), "0x%02x, ", (uint8_t)data[i]);
             } else {
-                sx_snprintf(hex, sizeof(hex), "0x%02x };\n", data[i]);
+                sx_snprintf(hex, sizeof(hex), "0x%02x };\n", (uint8_t)data[i]);
             }
             sx_file_write_text(&writer, hex);
 
@@ -662,7 +677,7 @@ static int cross_compile(const cmd_args& args, std::vector<uint32_t>& spirv,
         // Use spirv-cross to convert to other types of shader
         if (args.lang == SHADER_LANG_GLES) {
             compiler = std::unique_ptr<spirv_cross::CompilerGLSL>(new spirv_cross::CompilerGLSL(spirv));
-        } else if (args.lang == SHADER_LANG_METAL) {
+        } else if (args.lang == SHADER_LANG_MSL) {
             compiler = std::unique_ptr<spirv_cross::CompilerMSL>(new spirv_cross::CompilerMSL(spirv));
         } else if (args.lang == SHADER_LANG_HLSL) {
             compiler = std::unique_ptr<spirv_cross::CompilerHLSL>(new spirv_cross::CompilerHLSL(spirv));
@@ -731,7 +746,8 @@ static int cross_compile(const cmd_args& args, std::vector<uint32_t>& spirv,
 
             if (args.compile_bin) {
 #ifdef BYTECODE_COMPILATION
-                sx_mem_block* mem = compile_binary(code.c_str(), args.out_filepath, args.profile_ver, stage);
+                sx_mem_block* mem = compile_binary(code.c_str(), args.out_filepath, args.profile_ver, 
+                                                   stage, args.debug_bin);
                 if (!mem) {
                     printf("Bytecode compilation of '%s' failed\n", args.out_filepath);
                     return -1;
@@ -766,7 +782,8 @@ static int cross_compile(const cmd_args& args, std::vector<uint32_t>& spirv,
             // Check if we have to compile byte-code or output the source only
             if (args.compile_bin) {
 #ifdef BYTECODE_COMPILATION
-                sx_mem_block* mem = compile_binary(code.c_str(), filepath.c_str(), args.profile_ver, stage);
+                sx_mem_block* mem = compile_binary(code.c_str(), filepath.c_str(), args.profile_ver, 
+                                                   stage, args.debug_bin);
                 if (!mem) {
                     printf("Bytecode compilation of '%s' failed\n", filepath.c_str());
                     return -1;
@@ -1011,15 +1028,16 @@ int main(int argc, char* argv[])
         {"lang", 'l', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'l', "Convert to shader language", "es/metal/hlsl"},
         {"defines", 'D', SX_CMDLINE_OPTYPE_OPTIONAL, 0x0, 'D', "Preprocessor definitions, seperated by comma", "Defines"},
         {"invert-y", 'Y', SX_CMDLINE_OPTYPE_FLAG_SET, &args.invert_y, 1, "Invert position.y in vertex shader", 0x0},
-        {"profile", 'p', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, '0', "Shader profile version (HLSL: 30, 40, 50, 60), (ES: 200, 300)", "ProfileVersion"},
+        {"profile", 'p', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'p', "Shader profile version (HLSL: 30, 40, 50, 60), (ES: 200, 300)", "ProfileVersion"},
         {"dumpc", 'C', SX_CMDLINE_OPTYPE_FLAG_SET, &dump_conf, 1, "Dump shader limits configuration", 0x0},
         {"include-dirs", 'I', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'I', "Set include directory for <system> files, seperated by ';'", "Directory(s)"},
         {"preprocess", 'P', SX_CMDLINE_OPTYPE_FLAG_SET, &args.preprocess, 1, "Dump preprocessed result to terminal"},
-        {"cvar", 'N', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'N', "Outputs Hex binary to a C include file with a variable name", "VariableName"},
+        {"cvar", 'N', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'N', "Outputs Hex data to a C include file with a variable name", "VariableName"},
         {"flatten-ubos", 'F', SX_CMDLINE_OPTYPE_FLAG_SET, &args.flatten_ubos, 1, "Flatten UBOs, useful for ES2 shaders", 0x0},
         {"reflect", 'r', SX_CMDLINE_OPTYPE_OPTIONAL, 0x0, 'r', "Output shader reflection information to a json file", "Filepath"},
         {"sgs", 'G', SX_CMDLINE_OPTYPE_FLAG_SET, &args.sgs_file, 1, "Output file should be packed SGS format", "Filepath"},
         {"bin", 'b', SX_CMDLINE_OPTYPE_FLAG_SET, &args.compile_bin, 1, "Compile to bytecode instead of source. requires ENABLE_D3D11_COMPILER for HLSL", 0x0},
+        {"debug-bin", 'g', SX_CMDLINE_OPTYPE_FLAG_SET, &args.debug_bin, 1, "Generate debug info for binary compilation, should come with --bin", 0x0},
         SX_CMDLINE_OPT_END
     };
     sx_cmdline_context* cmdline = sx_cmdline_create_context(g_alloc, argc, (const char**)argv, opts);
@@ -1108,9 +1126,9 @@ int main(int argc, char* argv[])
         args.compile_bin = 0;
     } 
 #   ifndef D3D11_COMPILER
-    // Windoes + HLSL -> works but requires ENABLE_D3D11_COMPILER
+    // Windows + HLSL -> works but requires ENABLE_D3D11_COMPILER
     else if (args.compile_bin) {
-        puts("Cannot compile to byte-code, set ENABLE_D3D11_COMPILER flag in cmake settings");
+        puts("Cannot compile to byte-code, glslcc is not built with ENABLE_D3D11_COMPILER flag");
         exit(-1);
     }
 #   endif    
@@ -1127,7 +1145,7 @@ int main(int argc, char* argv[])
         switch (args.lang) {
             case SHADER_LANG_GLES:  slang = SGS_SHADER_GLES;    break;
             case SHADER_LANG_HLSL:  slang = SGS_SHADER_HLSL;    break;
-            case SHADER_LANG_METAL: slang = SGS_SHADER_MSL;     break;
+            case SHADER_LANG_MSL:   slang = SGS_SHADER_MSL;     break;
         }
         g_sgs = sgs_create_file(g_alloc, args.out_filepath, slang, args.profile_ver);
         sx_assert(g_sgs);
