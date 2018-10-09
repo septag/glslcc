@@ -12,6 +12,7 @@
 //      1.2.3       memory corruption fix
 //      1.3.0       D3D11 compiler for windows
 //      1.3.1       Added -g for byte-code compiler flags
+//      1.3.2       Fixed vertex semantic names for reflection
 //
 #define _ALLOW_KEYWORD_MACROS
 
@@ -57,7 +58,7 @@
 
 #define VERSION_MAJOR  1
 #define VERSION_MINOR  3
-#define VERSION_SUB    1
+#define VERSION_SUB    2
 
 static const sx_alloc* g_alloc = sx_alloc_malloc;
 static sgs_file* g_sgs         = nullptr;
@@ -120,6 +121,27 @@ static const char* k_attrib_names[VERTEX_ATTRIB_COUNT] = {
     "COLOR1",
     "COLOR2",
     "COLOR3",
+    "TANGENT",
+    "BINORMAL",
+    "BLENDINDICES",
+    "BLENDWEIGHT"
+};
+
+static const char* k_attrib_sem_names[VERTEX_ATTRIB_COUNT] = {
+    "POSITION",
+    "NORMAL",
+    "TEXCOORD",
+    "TEXCOORD",
+    "TEXCOORD",
+    "TEXCOORD",
+    "TEXCOORD",
+    "TEXCOORD",
+    "TEXCOORD",
+    "TEXCOORD",
+    "COLOR",
+    "COLOR",
+    "COLOR",
+    "COLOR",
     "TANGENT",
     "BINORMAL",
     "BLENDINDICES",
@@ -538,7 +560,7 @@ static void output_resource_info(sjson_context* jctx, sjson_node* jparent,
 		}
 
         if (res_type == RES_TYPE_VERTEX_INPUT && loc != -1) {
-            sjson_put_string(jctx, jres, "semantic", k_attrib_names[loc]);
+            sjson_put_string(jctx, jres, "semantic", k_attrib_sem_names[loc]);
             sjson_put_int(jctx, jres, "semantic_index", k_attrib_sem_indices[loc]);
         }
 
