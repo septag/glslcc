@@ -19,7 +19,8 @@ enum sgs_shader_lang
 {
     SGS_SHADER_GLES = 1,
     SGS_SHADER_HLSL,
-    SGS_SHADER_MSL
+    SGS_SHADER_MSL,
+    SGS_SHADER_GLSL
 };
 
 enum sgs_shader_stage

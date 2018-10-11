@@ -1175,6 +1175,7 @@ int main(int argc, char* argv[])
             case SHADER_LANG_GLES:  slang = SGS_SHADER_GLES;    break;
             case SHADER_LANG_HLSL:  slang = SGS_SHADER_HLSL;    break;
             case SHADER_LANG_MSL:   slang = SGS_SHADER_MSL;     break;
+            case SHADER_LANG_GLSL:  slang = SGS_SHADER_GLSL;    break;
         }
         g_sgs = sgs_create_file(g_alloc, args.out_filepath, slang, args.profile_ver);
         sx_assert(g_sgs);
