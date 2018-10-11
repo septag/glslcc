@@ -1,7 +1,7 @@
-## glslcc: Cross-compiler for GLSL shader language (GLSL->HLSL,METAL,GLES)
+## glslcc: Cross-compiler for GLSL shader language (GLSL->HLSL,METAL,GLES,GLSLv3)
 [@septag](https://twitter.com/septagh)
 
-**glslcc** is a command line tool that converts GLSL (version 4.5) code to HLSL, GLES (version 2.0 and 3.0) and Metal (MSL).  
+**glslcc** is a command line tool that converts GLSL code to HLSL, GLES (version 2.0 and 3.0), Metal (MSL) and also other GLSL versions (GLSL 330, GLSL 400, etc..).  
 It uses [glslang](https://github.com/KhronosGroup/glslang) for parsing GLSL and compiling SPIR-V. And [SPIRV-cross](https://github.com/KhronosGroup/SPIRV-Cross) for converting the code from SPIR-V to the target language.  
 
 ### Features
@@ -16,7 +16,8 @@ It uses [glslang](https://github.com/KhronosGroup/glslang) for parsing GLSL and 
 - Can output to individual files
 - Can output all pipeline shaders (vertex+fragment) and their reflection data to .c file variables
 - Supports both GLES2 and GLES3 shaders
-- optional D3D11 byte code output for HLSL shaders
+- Can output to other GLSL versions like 330
+- Optional D3D11 byte code output for HLSL shaders
 
 ### Build
 _glslcc_ uses CMake. build and tested on: 

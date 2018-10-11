@@ -13,6 +13,7 @@
 //      1.3.0       D3D11 compiler for windows
 //      1.3.1       Added -g for byte-code compiler flags
 //      1.3.2       Fixed vertex semantic names for reflection
+//      1.4.0       Added GLSL shader support
 //
 #define _ALLOW_KEYWORD_MACROS
 
@@ -57,8 +58,8 @@
 #include "../3rdparty/sjson/sjson.h"
 
 #define VERSION_MAJOR  1
-#define VERSION_MINOR  3
-#define VERSION_SUB    2
+#define VERSION_MINOR  4
+#define VERSION_SUB    0
 
 static const sx_alloc* g_alloc = sx_alloc_malloc;
 static sgs_file* g_sgs         = nullptr;
@@ -74,13 +75,15 @@ enum shader_lang
     SHADER_LANG_GLES = 0,
     SHADER_LANG_HLSL,
     SHADER_LANG_MSL,
+    SHADER_LANG_GLSL,
     SHADER_LANG_COUNT
 };
 
 static const char* k_shader_types[SHADER_LANG_COUNT] = {
     "gles",
     "hlsl",
-    "msl"
+    "msl",
+    "glsl"
 };
 
 enum vertex_attribs
@@ -697,7 +700,7 @@ static int cross_compile(const cmd_args& args, std::vector<uint32_t>& spirv,
     try {
         std::unique_ptr<spirv_cross::CompilerGLSL> compiler;
         // Use spirv-cross to convert to other types of shader
-        if (args.lang == SHADER_LANG_GLES) {
+        if (args.lang == SHADER_LANG_GLES || args.lang == SHADER_LANG_GLSL) {
             compiler = std::unique_ptr<spirv_cross::CompilerGLSL>(new spirv_cross::CompilerGLSL(spirv));
         } else if (args.lang == SHADER_LANG_MSL) {
             compiler = std::unique_ptr<spirv_cross::CompilerMSL>(new spirv_cross::CompilerMSL(spirv));
@@ -710,8 +713,13 @@ static int cross_compile(const cmd_args& args, std::vector<uint32_t>& spirv,
         spirv_cross::ShaderResources ress = compiler->get_shader_resources();
 
         spirv_cross::CompilerGLSL::Options opts = compiler->get_common_options();
+        opts.flatten_multidimensional_arrays = true;
         if (args.lang == SHADER_LANG_GLES) {
             opts.es = true;
+            opts.version = args.profile_ver;
+        } else if (args.lang == SHADER_LANG_GLSL) {
+            opts.enable_420pack_extension = false;
+            opts.es = false;
             opts.version = args.profile_ver;
         } else if (args.lang == SHADER_LANG_HLSL) {
             spirv_cross::CompilerHLSL* hlsl = (spirv_cross::CompilerHLSL*)compiler.get();
@@ -729,9 +737,6 @@ static int cross_compile(const cmd_args& args, std::vector<uint32_t>& spirv,
                 hlsl->set_decoration(new_builtin, spv::DecorationBinding, 0);
             }
         }
-
-        // Flatten multi-dimentional arrays
-        opts.flatten_multidimensional_arrays = true;
 
         // Flatten ubos
         if (args.flatten_ubos) {
@@ -1047,10 +1052,10 @@ int main(int argc, char* argv[])
         {"frag", 'f', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'f', "Fragment shader source file", "Filepath"},
         {"compute", 'c', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'c', "Compute shader source file", "Filepath"},
         {"output", 'o', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'o', "Output file", "Filepath"},
-        {"lang", 'l', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'l', "Convert to shader language", "es/metal/hlsl"},
+        {"lang", 'l', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'l', "Convert to shader language", "es/msl/hlsl/glsl"},
         {"defines", 'D', SX_CMDLINE_OPTYPE_OPTIONAL, 0x0, 'D', "Preprocessor definitions, seperated by comma", "Defines"},
         {"invert-y", 'Y', SX_CMDLINE_OPTYPE_FLAG_SET, &args.invert_y, 1, "Invert position.y in vertex shader", 0x0},
-        {"profile", 'p', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'p', "Shader profile version (HLSL: 30, 40, 50, 60), (ES: 200, 300)", "ProfileVersion"},
+        {"profile", 'p', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'p', "Shader profile version (HLSL: 40, 50, 60), (ES: 200, 300), (GLSL: 330, 400, 420)", "ProfileVersion"},
         {"dumpc", 'C', SX_CMDLINE_OPTYPE_FLAG_SET, &dump_conf, 1, "Dump shader limits configuration", 0x0},
         {"include-dirs", 'I', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'I', "Set include directory for <system> files, seperated by ';'", "Directory(s)"},
         {"preprocess", 'P', SX_CMDLINE_OPTYPE_FLAG_SET, &args.preprocess, 1, "Dump preprocessed result to terminal"},
@@ -1058,7 +1063,7 @@ int main(int argc, char* argv[])
         {"flatten-ubos", 'F', SX_CMDLINE_OPTYPE_FLAG_SET, &args.flatten_ubos, 1, "Flatten UBOs, useful for ES2 shaders", 0x0},
         {"reflect", 'r', SX_CMDLINE_OPTYPE_OPTIONAL, 0x0, 'r', "Output shader reflection information to a json file", "Filepath"},
         {"sgs", 'G', SX_CMDLINE_OPTYPE_FLAG_SET, &args.sgs_file, 1, "Output file should be packed SGS format", "Filepath"},
-        {"bin", 'b', SX_CMDLINE_OPTYPE_FLAG_SET, &args.compile_bin, 1, "Compile to bytecode instead of source. requires ENABLE_D3D11_COMPILER for HLSL", 0x0},
+        {"bin", 'b', SX_CMDLINE_OPTYPE_FLAG_SET, &args.compile_bin, 1, "Compile to bytecode instead of source. requires ENABLE_D3D11_COMPILER build flag", 0x0},
         {"debug-bin", 'g', SX_CMDLINE_OPTYPE_FLAG_SET, &args.debug_bin, 1, "Generate debug info for binary compilation, should come with --bin", 0x0},
         SX_CMDLINE_OPT_END
     };
@@ -1137,9 +1142,11 @@ int main(int argc, char* argv[])
     // GLSL: 200 (2.00)
     if (args.profile_ver == 0) {
         if (args.lang == SHADER_LANG_GLES)
-            args.profile_ver = 200;
+            args.profile_ver = 200; 
         else if (args.lang == SHADER_LANG_HLSL)
-            args.profile_ver = 50;
+            args.profile_ver = 50;      // D3D11
+        else if (args.lang == SHADER_LANG_GLSL)
+            args.profile_ver = 400;     // D3D11 level hardware
     }
 
 #if SX_PLATFORM_WINDOWS 
