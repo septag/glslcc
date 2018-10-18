@@ -255,8 +255,7 @@ void sjson_remove_from_parent(sjson_node* node);
 
 void sjson_delete_node(sjson_context* ctx, sjson_node* node);
 
-// Higher le
-
+// Higher level construction
 sjson_node* sjson_put_obj(sjson_context* ctx, sjson_node* parent, const char* key);
 sjson_node* sjson_put_array(sjson_context* ctx, sjson_node* parent, const char* key);
 sjson_node* sjson_put_int(sjson_context* ctx, sjson_node* parent, const char* key, int val);

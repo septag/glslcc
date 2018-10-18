@@ -14,6 +14,7 @@
 //      1.3.1       Added -g for byte-code compiler flags
 //      1.3.2       Fixed vertex semantic names for reflection
 //      1.4.0       Added GLSL shader support
+//      1.4.1       More reflection data, like uniform block members and types
 //
 #define _ALLOW_KEYWORD_MACROS
 
@@ -59,7 +60,7 @@
 
 #define VERSION_MAJOR  1
 #define VERSION_MINOR  4
-#define VERSION_SUB    0
+#define VERSION_SUB    1
 
 static const sx_alloc* g_alloc = sx_alloc_malloc;
 static sgs_file* g_sgs         = nullptr;
@@ -482,21 +483,169 @@ enum resource_type
 {
     RES_TYPE_REGULAR = 0,
     RES_TYPE_SSBO,
-    RES_TYPE_VERTEX_INPUT
+    RES_TYPE_VERTEX_INPUT,
+    RES_TYPE_TEXTURE,
+    RES_TYPE_UNIFORM_BUFFER
 };
 
+struct uniform_type_mapping
+{
+    spirv_cross::SPIRType::BaseType base_type;
+    int                             vec_size;
+    int                             columns;
+    const char*                     type_str;
+};
+
+static const uniform_type_mapping k_uniform_map[] = {
+    {spirv_cross::SPIRType::Float,  1, 1, "float"},
+    {spirv_cross::SPIRType::Float,  2, 1, "float2"},
+    {spirv_cross::SPIRType::Float,  3, 1, "float3"},
+    {spirv_cross::SPIRType::Float,  4, 1, "float4"},
+    {spirv_cross::SPIRType::Float,  3, 4, "mat3x4"},
+    {spirv_cross::SPIRType::Float,  3, 4, "mat4x3"},
+    {spirv_cross::SPIRType::Float,  3, 3, "mat3x3"},
+    {spirv_cross::SPIRType::Float,  4, 4, "mat4"},
+    {spirv_cross::SPIRType::Int,  1, 1, "int"},
+    {spirv_cross::SPIRType::Int,  2, 1, "int2"},
+    {spirv_cross::SPIRType::Int,  3, 1, "int3"},
+    {spirv_cross::SPIRType::Int,  4, 1, "int4"}
+};
+
+enum ImageFormat {
+    ImageFormatUnknown = 0,
+    ImageFormatRgba32f = 1,
+    ImageFormatRgba16f = 2,
+    ImageFormatR32f = 3,
+    ImageFormatRgba8 = 4,
+    ImageFormatRgba8Snorm = 5,
+    ImageFormatRg32f = 6,
+    ImageFormatRg16f = 7,
+    ImageFormatR11fG11fB10f = 8,
+    ImageFormatR16f = 9,
+    ImageFormatRgba16 = 10,
+    ImageFormatRgb10A2 = 11,
+    ImageFormatRg16 = 12,
+    ImageFormatRg8 = 13,
+    ImageFormatR16 = 14,
+    ImageFormatR8 = 15,
+    ImageFormatRgba16Snorm = 16,
+    ImageFormatRg16Snorm = 17,
+    ImageFormatRg8Snorm = 18,
+    ImageFormatR16Snorm = 19,
+    ImageFormatR8Snorm = 20,
+    ImageFormatRgba32i = 21,
+    ImageFormatRgba16i = 22,
+    ImageFormatRgba8i = 23,
+    ImageFormatR32i = 24,
+    ImageFormatRg32i = 25,
+    ImageFormatRg16i = 26,
+    ImageFormatRg8i = 27,
+    ImageFormatR16i = 28,
+    ImageFormatR8i = 29,
+    ImageFormatRgba32ui = 30,
+    ImageFormatRgba16ui = 31,
+    ImageFormatRgba8ui = 32,
+    ImageFormatR32ui = 33,
+    ImageFormatRgb10a2ui = 34,
+    ImageFormatRg32ui = 35,
+    ImageFormatRg16ui = 36,
+    ImageFormatRg8ui = 37,
+    ImageFormatR16ui = 38,
+    ImageFormatR8ui = 39,
+    ImageFormatMax = 0x7fffffff,
+};
+
+enum Dim {
+    Dim1D = 0,
+    Dim2D = 1,
+    Dim3D = 2,
+    DimCube = 3,
+    DimRect = 4,
+    DimBuffer = 5,
+    DimSubpassData = 6,
+    DimMax = 0x7fffffff,
+};
+
+const char* k_texture_format_str[spv::ImageFormatR8ui+1] = {
+    "unknown",
+    "Rgba32f",
+    "Rgba16f",
+    "R32f",
+    "Rgba8",
+    "Rgba8Snorm",
+    "Rg32f",
+    "Rg16f",
+    "R11fG11fB10f",
+    "R16f",
+    "Rgba16",
+    "Rgb10A2",
+    "Rg16",
+    "Rg8",
+    "R16",
+    "R8",
+    "Rgba16Snorm",
+    "Rg16Snorm",
+    "Rg8Snorm",
+    "R16Snorm",
+    "R8Snorm",
+    "Rgba32i",
+    "Rgba16i",
+    "Rgba8i",
+    "R32i",
+    "Rg32i",
+    "Rg16i",
+    "Rg8i",
+    "R16i",
+    "R8i",
+    "Rgba32ui",
+    "Rgba16ui",
+    "Rgba8ui",
+    "R32ui",
+    "Rgb10a2ui",
+    "Rg32ui",
+    "Rg16ui",
+    "Rg8ui",
+    "R16ui",
+    "R8ui"
+};
+
+const char* k_texture_dim_str[spv::DimSubpassData+1] = {
+    "1d",
+    "2d",
+    "3d",
+    "cube",
+    "rect",
+    "buffer",
+    "subpass_data"
+};
+
+// https://github.com/KhronosGroup/SPIRV-Cross/wiki/Reflection-API-user-guide
 static void output_resource_info(sjson_context* jctx, sjson_node* jparent,
                                  const spirv_cross::Compiler& compiler, 
                                  const std::vector<spirv_cross::Resource>& ress,                                 
-                                 resource_type res_type = RES_TYPE_REGULAR)
+                                 resource_type res_type = RES_TYPE_REGULAR,
+                                 bool flatten_ubos = false)
 {
+    
+    auto resolve_variable_type = [](const spirv_cross::SPIRType& type)->const char* {
+        int count = sizeof(k_uniform_map)/sizeof(uniform_type_mapping);
+        for (int i = 0; i < count; i++) {
+            if (k_uniform_map[i].base_type == type.basetype &&
+                k_uniform_map[i].vec_size == type.vecsize && 
+                k_uniform_map[i].columns == type.columns)
+            {
+                return k_uniform_map[i].type_str;
+            }
+        }
+        return "unknown";
+    };
+
 	for (auto &res : ress) {
         sjson_node* jres = sjson_mkobject(jctx);
-
-		auto &type = compiler.get_type(res.type_id);
-
+        auto &type = compiler.get_type(res.type_id);
 		if (res_type == RES_TYPE_SSBO && compiler.buffer_is_hlsl_counter_buffer(res.id))
 			continue;
+        
 
 		// If we don't have a name, use the fallback for the type instead of the variable
 		// for SSBOs and UBOs since those are the only meaningful names to use externally.
@@ -571,6 +720,45 @@ static void output_resource_info(sjson_context* jctx, sjson_node* jparent,
 		if (res_type == RES_TYPE_SSBO && compiler.buffer_get_hlsl_counter_buffer(res.id, counter_id))
 			sjson_put_int(jctx, jres, "hlsl_counter_buffer_id", counter_id);
 
+        // Some extra 
+        if (res_type == RES_TYPE_UNIFORM_BUFFER) {
+            if (flatten_ubos) {
+                sjson_put_string(jctx, jres, "type", "float4");
+                sjson_put_int(jctx, jres, "array", block_size/16);
+            }
+
+            sjson_node* jmembers = sjson_put_array(jctx, jres, "members");
+            // members
+            int member_idx = 0;
+            for (auto &member_id : type.member_types) {
+                sjson_node* jmember = sjson_mkobject(jctx);
+                auto& member_type = compiler.get_type(member_id);
+
+                sjson_put_string(jctx, jmember, "name", compiler.get_member_name(type.self, member_idx).c_str());
+                sjson_put_string(jctx, jmember, "type", resolve_variable_type(member_type));
+                sjson_put_int(jctx, jmember, "offset", compiler.type_struct_member_offset(type, member_idx));
+                sjson_put_int(jctx, jmember, "size", (int)compiler.get_declared_struct_member_size(type, member_idx));
+                if (!member_type.array.empty()) {
+                    int arr_sz = 0;
+                    for (auto arr : member_type.array)
+                        arr_sz += arr;
+                    sjson_put_int(jctx, jmember, "array", arr_sz);
+                }
+
+                sjson_append_element(jmembers, jmember);
+                member_idx ++;
+            }
+        } else if (res_type == RES_TYPE_TEXTURE) {
+            sjson_put_string(jctx, jres, "dimension", k_texture_dim_str[type.image.dim]);
+            sjson_put_string(jctx, jres, "format", k_texture_format_str[type.image.format]);
+            if (type.image.ms)
+                sjson_put_bool(jctx, jres, "multisample", true);
+            if (type.image.arrayed)
+                sjson_put_bool(jctx, jres, "array", true);
+        } else if (res_type == RES_TYPE_VERTEX_INPUT) {
+            sjson_put_string(jctx, jres, "type", resolve_variable_type(type));
+        }
+
         sjson_append_element(jparent, jres);
 	}
 }
@@ -590,6 +778,8 @@ static void output_reflection(const cmd_args& args, const spirv_cross::Compiler&
         sjson_put_bool(jctx, jroot, "bytecode", true);
     if (args.debug_bin)
         sjson_put_bool(jctx, jroot, "debug_info", true);
+    if (args.flatten_ubos)
+        sjson_put_bool(jctx, jroot, "flatten_ubos", true);
 
     sjson_node* jshader = sjson_put_obj(jctx, jroot, get_stage_name(stage));
     sjson_put_string(jctx, jshader, "file", filename);
@@ -602,7 +792,7 @@ static void output_reflection(const cmd_args& args, const spirv_cross::Compiler&
     if (!ress.stage_outputs.empty())
         output_resource_info(jctx, sjson_put_array(jctx, jshader, "outputs"), compiler, ress.stage_outputs);
     if (!ress.sampled_images.empty())
-        output_resource_info(jctx, sjson_put_array(jctx, jshader, "textures"), compiler, ress.sampled_images);
+        output_resource_info(jctx, sjson_put_array(jctx, jshader, "textures"), compiler, ress.sampled_images, RES_TYPE_TEXTURE);
     if (!ress.separate_images.empty())
         output_resource_info(jctx, sjson_put_array(jctx, jshader, "sep_images"), compiler, ress.separate_images);
     if (!ress.separate_samplers.empty())
@@ -611,8 +801,10 @@ static void output_reflection(const cmd_args& args, const spirv_cross::Compiler&
         output_resource_info(jctx, sjson_put_array(jctx, jshader, "storage_images"), compiler, ress.storage_images);
     if (!ress.storage_buffers.empty())
         output_resource_info(jctx, sjson_put_array(jctx, jshader, "storage_buffers"), compiler, ress.storage_buffers, RES_TYPE_SSBO);
-    if (!ress.uniform_buffers.empty())
-        output_resource_info(jctx, sjson_put_array(jctx, jshader, "uniform_buffers"), compiler, ress.uniform_buffers);
+    if (!ress.uniform_buffers.empty()) {
+        output_resource_info(jctx, sjson_put_array(jctx, jshader, "uniform_buffers"), compiler, ress.uniform_buffers,
+                             RES_TYPE_UNIFORM_BUFFER, args.flatten_ubos ? true : false);
+    }
     if (!ress.push_constant_buffers.empty())
         output_resource_info(jctx, sjson_put_array(jctx, jshader, "push_cbs"), compiler, ress.push_constant_buffers);
     if (!ress.atomic_counters.empty())
@@ -955,8 +1147,10 @@ static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
         int shader_len = (int)mem->size;
         shader->setStringsWithLengthsAndNames(&shader_str, &shader_len, &files[i].filename, 1);
         shader->setInvertY(args.invert_y ? true : false);
-        shader->setEnvInput(glslang::EShSourceGlsl, files[i].stage, glslang::EShClientOpenGL, default_version);
-        shader->setEnvClient(glslang::EShClientOpenGL, glslang::EShTargetOpenGL_450);
+        shader->setEnvInput(glslang::EShSourceGlsl, files[i].stage, glslang::EShClientVulkan, default_version);
+        shader->setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_1);
+        //shader->setEnvInput(glslang::EShSourceGlsl, files[i].stage, glslang::EShClientOpenGL, default_version);
+        //shader->setEnvClient(glslang::EShClientOpenGL, glslang::EShTargetOpenGL_450);
         shader->setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_0);
         add_defines(shader, args, def);
 
