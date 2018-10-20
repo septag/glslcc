@@ -308,6 +308,8 @@ static void parse_defines(cmd_args* args, const char* defines)
         def = sx_skip_whitespace(def);
         if (def[0]) {
             const char* next_def = sx_strchar(def, ',');
+            if (!next_def)
+                next_def = sx_strchar(def, ';');
             int len;
             if (next_def) {
                 len = (int)(uintptr_t)(next_def - def);
@@ -322,7 +324,9 @@ static void parse_defines(cmd_args* args, const char* defines)
                 sx_trim_whitespace(d.def, len+1, d.def);
 
                 // Check def=value pair
-                char* equal = (char*)sx_strchar(d.def, '=');
+                char* equal = (char*)sx_strchar(d.def, ':');
+                if (!equal)
+                    equal = (char*)sx_strchar(d.def, '=');
                 if (equal) {
                     *equal = 0;
                     d.val = equal + 1;
@@ -336,16 +340,6 @@ static void parse_defines(cmd_args* args, const char* defines)
                 def++;
         }
     } while (def);
-
-#if 0
-    printf("Defines: %d\n", sx_array_count(g_defines));
-    for (int i = 0; i < sx_array_count(g_defines); i++) {
-        if (g_defines[i].val) 
-            printf("%s: %s\n", g_defines[i].def, g_defines[i].val);
-        else
-            printf(g_defines[i].def);
-    }
-#endif
 }
 
 #ifdef D3D11_COMPILER
@@ -508,7 +502,11 @@ static const uniform_type_mapping k_uniform_map[] = {
     {spirv_cross::SPIRType::Int,  1, 1, "int"},
     {spirv_cross::SPIRType::Int,  2, 1, "int2"},
     {spirv_cross::SPIRType::Int,  3, 1, "int3"},
-    {spirv_cross::SPIRType::Int,  4, 1, "int4"}
+    {spirv_cross::SPIRType::Int,  4, 1, "int4"},
+    {spirv_cross::SPIRType::Half,  4, 1, "float"},
+    {spirv_cross::SPIRType::Half,  4, 2, "float2"},
+    {spirv_cross::SPIRType::Half,  4, 3, "float3"},
+    {spirv_cross::SPIRType::Half,  4, 4, "float4"}
 };
 
 enum ImageFormat {
@@ -1246,8 +1244,8 @@ int main(int argc, char* argv[])
         {"frag", 'f', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'f', "Fragment shader source file", "Filepath"},
         {"compute", 'c', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'c', "Compute shader source file", "Filepath"},
         {"output", 'o', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'o', "Output file", "Filepath"},
-        {"lang", 'l', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'l', "Convert to shader language", "es/msl/hlsl/glsl"},
-        {"defines", 'D', SX_CMDLINE_OPTYPE_OPTIONAL, 0x0, 'D', "Preprocessor definitions, seperated by comma", "Defines"},
+        {"lang", 'l', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'l', "Convert to shader language", "gles/msl/hlsl/glsl"},
+        {"defines", 'D', SX_CMDLINE_OPTYPE_OPTIONAL, 0x0, 'D', "Preprocessor definitions, seperated by comma or ';'", "Defines"},
         {"invert-y", 'Y', SX_CMDLINE_OPTYPE_FLAG_SET, &args.invert_y, 1, "Invert position.y in vertex shader", 0x0},
         {"profile", 'p', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'p', "Shader profile version (HLSL: 40, 50, 60), (ES: 200, 300), (GLSL: 330, 400, 420)", "ProfileVersion"},
         {"dumpc", 'C', SX_CMDLINE_OPTYPE_FLAG_SET, &dump_conf, 1, "Dump shader limits configuration", 0x0},
