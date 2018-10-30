@@ -723,7 +723,7 @@ static void output_resource_info(sjson_context* jctx, sjson_node* jparent,
         if (res_type == RES_TYPE_UNIFORM_BUFFER) {
             if (flatten_ubos) {
                 sjson_put_string(jctx, jres, "type", "float4");
-                sjson_put_int(jctx, jres, "array", sx_min((int)block_size, 16)/16);
+                sjson_put_int(jctx, jres, "array", sx_max((int)block_size, 16)/16);
             }
 
             sjson_node* jmembers = sjson_put_array(jctx, jres, "members");
