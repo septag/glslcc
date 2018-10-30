@@ -15,6 +15,7 @@
 //      1.3.2       Fixed vertex semantic names for reflection
 //      1.4.0       Added GLSL shader support
 //      1.4.1       More reflection data, like uniform block members and types
+//      1.4.2       Small bug fixed in flatten uniform block array size
 //
 #define _ALLOW_KEYWORD_MACROS
 
@@ -60,7 +61,7 @@
 
 #define VERSION_MAJOR  1
 #define VERSION_MINOR  4
-#define VERSION_SUB    1
+#define VERSION_SUB    2
 
 static const sx_alloc* g_alloc = sx_alloc_malloc;
 static sgs_file* g_sgs         = nullptr;
@@ -722,7 +723,7 @@ static void output_resource_info(sjson_context* jctx, sjson_node* jparent,
         if (res_type == RES_TYPE_UNIFORM_BUFFER) {
             if (flatten_ubos) {
                 sjson_put_string(jctx, jres, "type", "float4");
-                sjson_put_int(jctx, jres, "array", block_size/16);
+                sjson_put_int(jctx, jres, "array", sx_min((int)block_size, 16)/16);
             }
 
             sjson_node* jmembers = sjson_put_array(jctx, jres, "members");
