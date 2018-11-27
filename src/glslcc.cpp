@@ -960,6 +960,7 @@ static int cross_compile(const cmd_args& args, std::vector<uint32_t>& spirv,
             case EShLangVertex:         sstage = SGS_STAGE_VERTEX;      break;
             case EShLangFragment:       sstage = SGS_STAGE_FRAGMENT;    break;
             case EShLangCompute:        sstage = SGS_STAGE_COMPUTE;     break;
+            default:                    sstage = SGS_STAGE_COUNT;       break;
             }    
 
             if (args.compile_bin) {
@@ -1369,6 +1370,7 @@ int main(int argc, char* argv[])
             case SHADER_LANG_HLSL:  slang = SGS_SHADER_HLSL;    break;
             case SHADER_LANG_MSL:   slang = SGS_SHADER_MSL;     break;
             case SHADER_LANG_GLSL:  slang = SGS_SHADER_GLSL;    break;
+            default:                sx_assert(0); slang = SGS_SHADER_GLSL;    break;
         }
         g_sgs = sgs_create_file(g_alloc, args.out_filepath, slang, args.profile_ver);
         sx_assert(g_sgs);
