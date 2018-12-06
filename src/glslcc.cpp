@@ -16,6 +16,7 @@
 //      1.4.0       Added GLSL shader support
 //      1.4.1       More reflection data, like uniform block members and types
 //      1.4.2       Small bug fixed in flatten uniform block array size
+//      1.4.3       Bug fixed for MSL shaders where vertex input attributes needed to be sequential (SEMANTIC conflict)
 //
 #define _ALLOW_KEYWORD_MACROS
 
@@ -61,7 +62,7 @@
 
 #define VERSION_MAJOR  1
 #define VERSION_MINOR  4
-#define VERSION_SUB    2
+#define VERSION_SUB    3
 
 static const sx_alloc* g_alloc = sx_alloc_malloc;
 static sgs_file* g_sgs         = nullptr;
@@ -937,6 +938,22 @@ static int cross_compile(const cmd_args& args, std::vector<uint32_t>& spirv,
                 compiler->flatten_buffer_block(ubo.id);
         }
 
+        // Reset vertex input locations for MSL
+        std::vector<int> old_locs;
+        if (args.lang == SHADER_LANG_MSL && stage == EShLangVertex) {
+            for (int i = 0; i < ress.stage_inputs.size(); i++) {
+                spirv_cross::Resource& res = ress.stage_inputs[i];
+                spirv_cross::Bitset mask = compiler->get_decoration_bitset(res.id);
+
+                if (mask.get(spv::DecorationLocation)) {
+                    old_locs.push_back(compiler->get_decoration(res.id, spv::DecorationLocation));
+                    compiler->set_decoration(res.id, spv::DecorationLocation, (uint32_t)i);
+                } else {
+                    old_locs.push_back(-1);
+                }
+            }
+        }
+
         compiler->set_common_options(opts);
 
         std::string code;
@@ -979,6 +996,19 @@ static int cross_compile(const cmd_args& args, std::vector<uint32_t>& spirv,
                 sgs_add_stage_code(g_sgs, sstage, code.c_str());
             }
 
+            // turn back location attributs for reflection
+            if (!old_locs.empty()) {
+                sx_assert(old_locs.size() == ress.stage_inputs.size());
+                for (int i = 0; i < ress.stage_inputs.size(); i++) {
+                    spirv_cross::Resource& res = ress.stage_inputs[i];
+                    spirv_cross::Bitset mask = compiler->get_decoration_bitset(res.id);
+                    if (old_locs[i] != -1) {
+                        sx_assert(mask.get(spv::DecorationLocation));
+                        old_locs.push_back(compiler->get_decoration(res.id, spv::DecorationLocation));
+                        compiler->set_decoration(res.id, spv::DecorationLocation, old_locs[i]);
+                    }
+                }                
+            }
 
             std::string json_str;
             output_reflection(args, *compiler, ress, args.out_filepath, stage, &json_str);
@@ -1024,6 +1054,20 @@ static int cross_compile(const cmd_args& args, std::vector<uint32_t>& spirv,
             }
 
             if (args.reflect) {
+                // turn back location attributs for reflection
+                if (!old_locs.empty()) {
+                    sx_assert(old_locs.size() == ress.stage_inputs.size());
+                    for (int i = 0; i < ress.stage_inputs.size(); i++) {
+                        spirv_cross::Resource& res = ress.stage_inputs[i];
+                        spirv_cross::Bitset mask = compiler->get_decoration_bitset(res.id);
+                        if (old_locs[i] != -1) {
+                            sx_assert(mask.get(spv::DecorationLocation));
+                            old_locs.push_back(compiler->get_decoration(res.id, spv::DecorationLocation));
+                            compiler->set_decoration(res.id, spv::DecorationLocation, old_locs[i]);
+                        }
+                    }                
+                }
+
                 // output json reflection file
                 // if --reflect is defined, we just output to that file
                 // if --reflect is not defined, check cvar (.C file), and if set, output to the same file (out_filepath)
