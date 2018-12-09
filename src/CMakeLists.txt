@@ -23,28 +23,11 @@ target_link_libraries(glslcc PRIVATE
         spirv-cross-util 
         spirv-cross-msl)  
 
-function(remove_compile_options DEST_VAR COMPILER_FLAGS FLAGS)
-        separate_arguments(FLAGS)
-        foreach(FLAG ${FLAGS})
-            string(REPLACE "${FLAG}" "" COMPILER_FLAGS "${COMPILER_FLAGS}")
-        endforeach()
-        set(${DEST_VAR} ${COMPILER_FLAGS} PARENT_SCOPE)
-endfunction()
-    
-
 if (MSVC)
         if (ENABLE_D3D11_COMPILER)
                 add_definitions(-DD3D11_COMPILER)    
                 target_link_libraries(glslcc PRIVATE d3dcompiler)    
         endif()
-        remove_compile_options(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}" "/MDd")
-        remove_compile_options(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}" "/MDd")
-        remove_compile_options(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}" "/MDd")
-        remove_compile_options(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}" "/MDd")
-        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
-        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
-        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
-        set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MTd")
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
         target_link_libraries(glslcc PRIVATE -static-libgcc -static-libstdc++)
 endif()
