@@ -65,6 +65,7 @@ void sgs_add_stage_code(sgs_file* f, sgs_shader_stage stage, const char* code)
     int len = sx_strlen(code) + 1;
     f->code_block = (char*)sx_realloc(f->alloc, f->code_block, f->code_block_size + len);
     s->code_offset = f->code_block_size;
+    s->code_size = len;
     
     sx_memcpy(f->code_block + s->code_offset, code, len);
     f->code_block_size += len;
@@ -91,6 +92,7 @@ void sgs_add_stage_code_bin(sgs_file* f, sgs_shader_stage stage, const void* byt
 
     f->code_block = (char*)sx_realloc(f->alloc, f->code_block, f->code_block_size + len);
     s->code_offset = f->code_block_size;
+    s->code_size = len;
     
     sx_memcpy(f->code_block + s->code_offset, bytecode, len);
     f->code_block_size += len;
@@ -117,6 +119,7 @@ void sgs_add_stage_reflect(sgs_file* f, sgs_shader_stage stage, const char* refl
     int len = sx_strlen(reflect) + 1;
     f->reflect_block = (char*)sx_realloc(f->alloc, f->reflect_block, f->reflect_block_size + len);
     s->reflect_offset = f->reflect_block_size;
+    s->reflect_size = len;
     
     sx_memcpy(f->reflect_block + s->reflect_offset, reflect, len);
     f->reflect_block_size += len;
@@ -130,6 +133,7 @@ bool sgs_commit(sgs_file* f)
 
     int reflect_start_offset = sizeof(sgs_file_header) + sizeof(sgs_file_stage)*sx_array_count(f->stages);
     int data_start_offset = reflect_start_offset + f->reflect_block_size;
+    f->hdr.num_stages = sx_array_count(f->stages);
     
     sx_file_write(&writer, &f->hdr, sizeof(sgs_file_header));
     if (f->stages) {
