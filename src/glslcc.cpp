@@ -17,6 +17,8 @@
 //      1.4.1       More reflection data, like uniform block members and types
 //      1.4.2       Small bug fixed in flatten uniform block array size
 //      1.4.3       Bug fixed for MSL shaders where vertex input attributes needed to be sequential (SEMANTIC conflict)
+//      1.4.4       Minor bug fixes in SGS export
+//      1.4.5       Improved binary header writer to uint32_t
 //
 #define _ALLOW_KEYWORD_MACROS
 
@@ -62,7 +64,7 @@
 
 #define VERSION_MAJOR  1
 #define VERSION_MINOR  4
-#define VERSION_SUB    4
+#define VERSION_SUB    5
 
 static const sx_alloc* g_alloc = sx_alloc_malloc;
 static sgs_file* g_sgs         = nullptr;
@@ -829,7 +831,7 @@ static bool write_file(const char* filepath, const char* data, const char* cvar,
         return false;
     
     if (cvar && cvar[0]) {
-        const int chars_per_line = 16;
+        const int items_per_line = 8;
 
         // .C file
         if (!append) {
@@ -853,25 +855,50 @@ static bool write_file(const char* filepath, const char* data, const char* cvar,
         else
             len = sx_strlen(data) + 1;   // include the '\0' at the end to null-terminate the string
 
-        sx_snprintf(var, sizeof(var), "static const unsigned char %s[%d] = {\n\t", cvar, len);
+        // align data to uint32_t (4)
+        const uint32_t* aligned_data = (const uint32_t*)data;
+        int aligned_len = sx_align_mask(len, 3);
+        if (aligned_len > len) {
+            uint32_t* tmp = (uint32_t*)sx_malloc(g_alloc, aligned_len);
+            if (!tmp) {
+                sx_out_of_memory();
+                return false;
+            }
+            sx_memcpy(tmp, data, len);
+            sx_memset((uint8_t*)tmp + len, 0x0, aligned_len - len);
+            aligned_data = tmp;
+        }
+        const char* aligned_ptr = (const char*)aligned_data;
+
+        sx_snprintf(var, sizeof(var), "static const unsigned int %s_size = %d;\n", cvar, len);
+        sx_file_write_text(&writer, var);
+        sx_snprintf(var, sizeof(var), "static const unsigned int %s_data[%d/4] = {\n\t", cvar, aligned_len);
         sx_file_write_text(&writer, var);
 
-        for (int i = 0; i < len; i++) {
-            if (i != len - 1) {
-                sx_snprintf(hex, sizeof(hex), "0x%02x, ", (uint8_t)data[i]);
+        sx_assert(aligned_len % sizeof(uint32_t) == 0);
+        int uint_count = aligned_len/4;
+        for (int i = 0; i < uint_count; i++) {
+            if (i != uint_count - 1) {
+                sx_snprintf(hex, sizeof(hex), "0x%08x, ", *aligned_data);
             } else {
-                sx_snprintf(hex, sizeof(hex), "0x%02x };\n", (uint8_t)data[i]);
+                sx_snprintf(hex, sizeof(hex), "0x%08x };\n", *aligned_data);
             }
             sx_file_write_text(&writer, hex);
 
             ++char_offset;
-            if (char_offset == chars_per_line) {
+            if (char_offset == items_per_line) {
                 sx_file_write_text(&writer, "\n\t");
                 char_offset = 0;
             }
+
+            ++aligned_data;
         }
         
         sx_file_write_text(&writer, "\n");
+
+        if (aligned_ptr != data) {
+            sx_free(g_alloc, const_cast<char*>(aligned_ptr));
+        }
     } else {
         if (binary_size > 0)
             sx_file_write(&writer, data, binary_size);
@@ -1424,7 +1451,7 @@ int main(int argc, char* argv[])
 
     if (g_sgs) {
         if (r == 0 && !sgs_commit(g_sgs)) {
-            printf("Writing SGS file '%s' failed", args.out_filepath);
+            printf("Writing SGS file '%s' failed\n", args.out_filepath);
         }
         sgs_destroy_file(g_sgs);
     }
