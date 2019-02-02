@@ -265,6 +265,7 @@ struct cmd_args
     int         reflect;
     int         compile_bin;
     int         debug_bin;
+    int         silent;
     const char* cvar;
     const char* reflect_filepath;
 };
@@ -1122,7 +1123,8 @@ static int cross_compile(const cmd_args& args, std::vector<uint32_t>& spirv,
             }
         }
         
-        puts(filename); // SUCCESS
+        if (!args.silent)
+            puts(filename); // SUCCESS
         return 0;
     } catch (const std::exception& e) {
         printf("SPIRV-cross: %s\n", e.what());
@@ -1330,6 +1332,7 @@ int main(int argc, char* argv[])
         {"sgs", 'G', SX_CMDLINE_OPTYPE_FLAG_SET, &args.sgs_file, 1, "Output file should be packed SGS format", "Filepath"},
         {"bin", 'b', SX_CMDLINE_OPTYPE_FLAG_SET, &args.compile_bin, 1, "Compile to bytecode instead of source. requires ENABLE_D3D11_COMPILER build flag", 0x0},
         {"debug-bin", 'g', SX_CMDLINE_OPTYPE_FLAG_SET, &args.debug_bin, 1, "Generate debug info for binary compilation, should come with --bin", 0x0},
+        {"silent", 'S', SX_CMDLINE_OPTYPE_FLAG_SET, &args.silent, 1, "Does not output filename(s) after compile success"},
         SX_CMDLINE_OPT_END
     };
     sx_cmdline_context* cmdline = sx_cmdline_create_context(g_alloc, argc, (const char**)argv, opts);
@@ -1370,12 +1373,12 @@ int main(int argc, char* argv[])
         (args.fs_filepath && !sx_os_path_isfile(args.fs_filepath)) ||
         (args.cs_filepath && !sx_os_path_isfile(args.cs_filepath))) 
     {
-        puts("input files are invalid");
+        puts("Input files are invalid");
         exit(-1);
     }
 
     if (!args.vs_filepath && !args.fs_filepath && !args.cs_filepath) {
-        puts("you must at least define one input shader file");
+        puts("You must at least define one input shader file");
         exit(-1);
     }
 
@@ -1428,7 +1431,7 @@ int main(int argc, char* argv[])
 #   endif    
 #else
     if (args.compile_bin) {
-        puts("ignoring --bin flag, byte-code compilation not implemented for this target");
+        puts("Ignoring --bin flag, byte-code compilation not implemented for this target");
         args.compile_bin = 0;
     }
 #endif
