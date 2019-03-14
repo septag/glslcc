@@ -134,10 +134,28 @@ The blocks are composed of a uint32_t fourcc code + uint32_t variable defining t
 ### D3D11 Compiler
 There is a support for compiling d3d11 shaders (ps_5_0, vs_5_0, cs_5_0) into D3D11 byte-code instead of HLSL source code. On windows with Windows SDK, set ```ENABLE_D3D11_COMPILER=ON``` flag for cmake, build the project and use ```--bin``` in the command line arguments to generate binary byte-code file.
 
+### CMake helper
+I've added [glslcc.cmake](https://github.com/septag/glslcc/blob/master/cmake/glslcc.cmake) module, to facilitate compilation in cmake projects. here's an example on how you can use it in your `CMakeLists.txt` to make shaders as C header files:  
+
+```
+include(glslcc)
+set(shaders test.vert test.frag)
+set_source_files_properties(${shaders} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "shaders_inc")
+glslcc_target_compile_shaders_h(sgk "${shaders}")
+```
+
+These properties can be assigned to shaders source files:
+
+- `GLSLCC_OUTPUT_DIRECTORY`: output directory path
+- `GLSLCC_SHADER_LANG`: shader language, `gles/msl/hlsl/glsl`. if not defined, it will be automatically selected by running platform
+- `GLSLCC_SHADER_VERSION`: shader profile version. default: _hlsl:50_, _gles:200_, _glsl:330_
+- `GLSLCC_OUTPUT_FILENAME`: compiled filename. default: `SOURCE_FILE.EXT.h`
+- `GLSLCC_COMPILE_FLAGS`: extra compilation flags to pass to `glslcc`
+- `COMPILE_DEFINITIONS`: compile definitions
+- `INCLUDE_DIRECTORIES`: shader include directories
+
 ### TODO
 
-- More documentation
-- LZ4 compression for SGS binary files
 - Support for more shader stages. I didn't have any use for geometry and tesselation shaders, but the _glslang_ supports all of them, so adding new shader stages shouldn't be a problem
 
 [License (BSD 2-clause)](https://github.com/septag/glslcc/blob/master/LICENSE)
