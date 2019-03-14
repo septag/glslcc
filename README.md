@@ -134,8 +134,8 @@ The blocks are composed of a uint32_t fourcc code + uint32_t variable defining t
 ### D3D11 Compiler
 There is a support for compiling d3d11 shaders (ps_5_0, vs_5_0, cs_5_0) into D3D11 byte-code instead of HLSL source code. On windows with Windows SDK, set ```ENABLE_D3D11_COMPILER=ON``` flag for cmake, build the project and use ```--bin``` in the command line arguments to generate binary byte-code file.
 
-### CMake helper
-I've added [glslcc.cmake](https://github.com/septag/glslcc/blob/master/cmake/glslcc.cmake) module, to facilitate compilation in cmake projects. here's an example on how you can use it in your `CMakeLists.txt` to make shaders as C header files:  
+### CMake module
+I've added [glslcc.cmake](https://github.com/septag/glslcc/blob/master/cmake/glslcc.cmake) module, to facilitate shader compilation in cmake projects. here's an example on how you can use it in your `CMakeLists.txt` to make shaders as C header files:  
 
 ```
 include(glslcc)
