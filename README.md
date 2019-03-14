@@ -114,7 +114,21 @@ SV_Target0, SV_Target1, SV_Target2, SV_Target3
 
 ### SGK file format
 
-There is also an option for exporting to .sgs files *(--sgs)* which is a simple binary format to hold all shaders (vs + fs + cs) with their reflection inside a binary blob. Check out ```sgs-file.h``` for the file format. It starts with the header *sgs_file_header*, following with an array of *sgs_file_stage* structs. Then you can determine the data offsets and size of code and reflection of each shader stage in the file.
+There is also an option for exporting to .sgs files *(--sgs)* which is a simple IFF like binary format to hold all shaders (vs + fs + cs) with their reflection inside a binary blob. 
+Check out [sgs-file.h](https://github.com/septag/glslcc/blob/master/src/sgs-file.h) for the file format spec and headers.
+The blocks are layed out like this:
+
+The blocks are composed of a uint32_t fourcc code + uint32_t variable defining the size of the block. So each block header is 8 bytes. For each header structure, check out the header file.
+- `SGS ` block
+	- `struct sgs_chunk`
+	- `STAG` blocks: defines each shader stage (vs + fs + ..)
+		- `CODE`: actual code for the shader stage
+		- `DATA`: binary (byte-code) data for the shader stage
+		- `REFL`: Reflection data for the shader stage
+			- `struct sgs_chunk_refl`: reflection data header
+			- `struct sgs_refl_input[]`: array of vertex-shader input attributes, if exists (see `sgs_chunk_refl` for number of inputs)
+			- `struct sgs_refl_uniform_buffer[]`: array of uniform buffer objects, if exists (see `sgs_chunk_refl` for number of uniform buffers)
+			- `struct sgs_refl_texture[]`: array of texture objects, if exists (see `sgs_chunk_refl` for number of textures)
 
 
 ### D3D11 Compiler
