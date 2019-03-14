@@ -141,7 +141,7 @@ I've added [glslcc.cmake](https://github.com/septag/glslcc/blob/master/cmake/gls
 include(glslcc)
 set(shaders test.vert test.frag)
 set_source_files_properties(${shaders} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "shaders_inc")
-glslcc_target_compile_shaders_h(sgk "${shaders}")
+glslcc_target_compile_shaders_h(project_name "${shaders}")
 ```
 
 These properties can be assigned to shaders source files:
