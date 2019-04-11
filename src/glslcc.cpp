@@ -20,9 +20,11 @@
 //      1.4.4       Minor bug fixes in SGS export
 //      1.4.5       Improved binary header writer to uint32_t
 //      1.5.0       Sgs format is now IFF like
+//      1.5.1       updated sx lib
 //
 #define _ALLOW_KEYWORD_MACROS
 
+#include "sx/allocator.h"
 #include "sx/cmdline.h"
 #include "sx/string.h"
 #include "sx/array.h"
@@ -65,9 +67,9 @@
 
 #define VERSION_MAJOR  1
 #define VERSION_MINOR  5
-#define VERSION_SUB    0
+#define VERSION_SUB    1
 
-static const sx_alloc* g_alloc = sx_alloc_malloc;
+static const sx_alloc* g_alloc = sx_alloc_malloc();
 static sgs_file* g_sgs         = nullptr;
 
 struct p_define
@@ -955,9 +957,8 @@ static void output_reflection_bin(const cmd_args& args, const spirv_cross::Compi
                               const char* filename,
                               EShLanguage stage, sx_mem_block** refl_mem)
 {
-    sx_mem_block* mem = sx_mem_create_block(g_alloc, 2048);
     sx_mem_writer w;
-    sx_mem_init_writer(&w, mem);
+    sx_mem_init_writer(&w, g_alloc, 2048);
 
     sgs_chunk_refl refl;
     sx_memset(&refl, 0x0, sizeof(refl));
@@ -982,7 +983,7 @@ static void output_reflection_bin(const cmd_args& args, const spirv_cross::Compi
     sx_mem_seekw(&w, 0, SX_WHENCE_BEGIN);
     sx_mem_write_var(&w, refl);
 
-    *refl_mem = mem;
+    *refl_mem = w.mem;
 }
 
 

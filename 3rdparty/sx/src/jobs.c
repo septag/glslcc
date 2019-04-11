@@ -314,11 +314,11 @@ static void sx__job_process_pending(sx_job_context* ctx) {
 
             int count = *pending.counter;
             sx_assert(pending.descs);
-            for (int i = 0; i < count; i++) {
+            for (int k = 0; k < count; k++) {
                 sx__job_add_list(
-                    &ctx->waiting_list[pending.descs[i].priority],
-                    &ctx->waiting_list_last[pending.descs[i].priority],
-                    sx__new_job(ctx, i, &pending.descs[i], pending.counter, pending.tags));
+                    &ctx->waiting_list[pending.descs[k].priority],
+                    &ctx->waiting_list_last[pending.descs[k].priority],
+                    sx__new_job(ctx, k, &pending.descs[k], pending.counter, pending.tags));
             }
             sx_free(ctx->alloc, pending.descs);
 
@@ -417,8 +417,12 @@ static sx__job_thread_data* sx__job_create_tdata(const sx_alloc* alloc, uint32_t
                                                  bool main_thrd) {
     sx__job_thread_data* tdata =
         (sx__job_thread_data*)sx_malloc(alloc, sizeof(sx__job_thread_data));
+    if (!tdata) {
+        sx_out_of_memory();
+        return NULL;
+    }    
     sx_memset(tdata, 0x0, sizeof(sx__job_thread_data));
-    tdata->tid = sx_thread_tid();
+    tdata->tid = tid;
     tdata->tags = 0xffffffff;
     tdata->main_thrd = main_thrd;
 
@@ -550,5 +554,6 @@ int sx_job_num_worker_threads(sx_job_context* ctx) {
 
 void sx_job_set_current_thread_tags(sx_job_context* ctx, uint32_t tags) {
     sx__job_thread_data* tdata = (sx__job_thread_data*)sx_tls_get(ctx->thread_tls);
+    sx_assert(tdata);
     tdata->tags = tags;
 }

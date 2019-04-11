@@ -32,14 +32,19 @@
 #    if SX_PLATFORM_ANDROID
 #        include <cpu-features.h>    // android_getCpuCount
 #        include <malloc.h>          // mallinfo
+#        include <sys/sendfile.h>    // sendfile
 #    elif SX_PLATFORM_LINUX || SX_PLATFORM_RPI || SX_PLATFORM_STEAMLINK
 #        include <linux/limits.h>
 #        include <sys/sendfile.h>    // sendfile
 #        include <sys/syscall.h>
+#        include <sys/types.h>
 #    elif SX_PLATFORM_APPLE
 //      https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/sendfile.2.html
 #        include <copyfile.h>
 #        include <mach/mach.h>
+#        include <mach-o/dyld.h>    // _NSGetExecutablePath
+#        include <sys/types.h>
+#        include <sys/sysctl.h>
 #    elif SX_PLATFORM_HURD
 #        include <pthread/pthread.h>
 #    elif SX_PLATFORM_BSD
@@ -212,17 +217,17 @@ void sx_os_sleep(int ms) {
 #endif    // SX_PLATFORM_
 }
 
-void* sx_os_exec(const char* const* argv) {
+sx_pinfo sx_os_exec(const char* const* argv) {
 #if SX_PLATFORM_LINUX || SX_PLATFORM_HURD
     pid_t pid = fork();
 
     if (0 == pid) {
         int result = execvp(argv[0], (char* const*)(&argv[1]));
         sx_unused(result);
-        return NULL;
+        return (sx_pinfo) {0};
     }
 
-    return (void*)(uintptr_t)pid;
+    return (sx_pinfo) { .linux_pid = (uintptr_t)pid };
 #elif SX_PLATFORM_WINDOWS
     STARTUPINFOA si;
     sx_memset(&si, 0, sizeof(STARTUPINFOA));
@@ -236,21 +241,30 @@ void* sx_os_exec(const char* const* argv) {
         total += sx_strlen(argv[ii]) + 1;
     }
 
+    sx_assert(total <= 32768);
     char* temp = (char*)alloca(total);
+    sx_assert(temp);
     int   len = 0;
     for (int ii = 0; NULL != argv[ii]; ++ii) {
         len += sx_snprintf(&temp[len], sx_max(0, total - len), "%s ", argv[ii]);
     }
 
+    sx_pinfo pinfo;
+
     bool ok = !!CreateProcessA(argv[0], temp, NULL, NULL, false, 0, NULL, NULL, &si, &pi);
     if (ok) {
-        return pi.hProcess;
+        pinfo.win_process_handle = pi.hProcess;
+        pinfo.win_thread_handle = pi.hThread;
+    } else {
+        pinfo.win_process_handle = NULL;
+        pinfo.win_thread_handle = NULL;
     }
 
-    return NULL;
+    return pinfo;
 #else
     sx_unused(argv);
-    return NULL;
+    sx_assert(0 && "not implemented");
+    return (sx_pinfo) {0};
 #endif    // SX_PLATFORM_
 }
 
@@ -284,7 +298,7 @@ bool sx_os_copy(const char* src, const char* dest) {
 }
 
 bool sx_os_rename(const char* src, const char* dest) {
-#if SX_COMPILER_MSVC
+#if SX_PLATFORM_WINDOWS
     return MoveFileExA(src, dest, MOVEFILE_WRITE_THROUGH | MOVEFILE_REPLACE_EXISTING) ? true
                                                                                       : false;
 #else
@@ -294,7 +308,7 @@ bool sx_os_rename(const char* src, const char* dest) {
 
 bool sx_os_del(const char* path, sx_file_type type) {
     sx_assert(type != SX_FILE_TYPE_INVALID);
-#if SX_COMPILER_MSVC
+#if SX_PLATFORM_WINDOWS
     if (type == SX_FILE_TYPE_REGULAR)
         return DeleteFileA(path) ? true : false;
     else
@@ -303,6 +317,33 @@ bool sx_os_del(const char* path, sx_file_type type) {
     return type == SX_FILE_TYPE_REGULAR ? (unlink(path) == 0) : (rmdir(path) == 0);
 #endif
 }
+
+bool sx_os_mkdir(const char* path) {
+#if SX_PLATFORM_WINDOWS
+    return CreateDirectoryA(path, NULL) == TRUE;
+#else
+    return mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == 0;
+#endif
+}
+
+char* sx_os_path_exepath(char* dst, int size) {
+#if SX_PLATFORM_WINDOWS
+    GetModuleFileName(NULL, dst, size);
+    return dst;
+#elif SX_PLATFORM_LINUX || SX_PLATFORM_RPI
+    char proc_path[32];
+    sx_snprintf(proc_path, sizeof(proc_path), "/proc/%d/exe", getpid());
+    size_t bytes = readlink(proc_path, dst, size);
+    dst[bytes] = 0;
+    return dst;
+#elif SX_PLATFORM_OSX
+    _NSGetExecutablePath(dst, (uint32_t*)&size);
+    return dst;
+#else
+    sx_assert(0 && "not implemented");
+#endif
+}
+
 
 sx_file_info sx_os_stat(const char* filepath) {
     sx_assert(filepath);
@@ -424,8 +465,12 @@ char* sx_os_path_dirname(char* dst, int size, const char* path) {
         r = sx_strrchar(path, '\\');
     if (r) {
         int o = (int)(intptr_t)(r - path);
-        sx_strncpy(dst, size, path, o);
-    } else {
+        if (dst == path) {
+            dst[o] = '\0';
+        } else {
+            sx_strncpy(dst, size, path, o);
+        }
+    } else if (dst != path) {
         sx_strcpy(dst, size, path);
     }
     return dst;
@@ -555,9 +600,6 @@ char* sx_os_path_normpath(char* dst, int size, const char* path) {
 #endif
 }
 
-// https://stackoverflow.com/questions/150355/programmatically-find-the-number-of-cores-on-a-machine
-int apple__numcores();    // fwd: os.m
-
 int sx_os_numcores() {
 #if SX_PLATFORM_WINDOWS
     SYSTEM_INFO sysinfo;
@@ -568,7 +610,16 @@ int sx_os_numcores() {
 #elif SX_PLATFORM_ANDROID
     return android_getCpuCount();
 #elif SX_PLATFORM_APPLE
-    return apple__numcores();
+    int ncpu;
+    size_t ncpu_len = sizeof(ncpu);
+    // hw.physicalcpu - The number of physical processors available in the current power management mode.
+    // hw.physicalcpu_max - The maximum number of physical processors that could be available this boot.
+    // hw.logicalcpu - The number of logical processors available in the current power management mode.
+    // hw.logicalcpu_max - The maximum number of logical processors that could be available this boot.
+    if (sysctlbyname("hw.logicalcpu", &ncpu, &ncpu_len, NULL, 0) == 0)
+        return ncpu;
+    return 1;
+
 #elif SX_PLATFORM_BSD
     int    ctlarg[2], ncpu;
     size_t len;

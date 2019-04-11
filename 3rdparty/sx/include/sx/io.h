@@ -18,18 +18,24 @@
 //                                          initialized with _ptr
 //              sx_define_mem_block_onstack creates and initializes memory block on stack
 //
-//      sx_mem_writer: Writes to an initialized memory block in streaming manner
-//              sx_init_writer              initializes the writer, assign a valid memory ptr
+//      sx_mem_writer: Writes to an initialized memory block for streamed writing
+//              sx_mem_init_writer          initializes the writer, allocates init_size as start
+//              sx_mem_release_writer       releases writer memory
 //              sx_mem_write                writes a piece of data to memory
 //              sx_mem_seekw                seeks inside the buffer
 //              sx_mem_write_var            helper macro to write single variables
 //
-//      sx_mem_reader: Reads from a pre-allocated memory in streaming manner
+//      sx_mem_reader: Reads from a pre-allocated memory for streamed reading
 //              sx_init_reader              initializes the read, data must be pre-allocated and
 //                                          alive during the read operations
 //              sx_mem_read                 reads a piece of data to memory
 //              sx_mem_seekr                seeks inside the buffer
 //              sx_mem_read_var             helper macro to read a single variable
+//              sx_mem_get_iff_chunk        helper for reading IFF chunks
+//                                          searches `size` bytes from the current location for
+//                                          FOURCC chunk type. if `size` <= 0, searches till the end
+//                                          if chunk is not found, returning `pos` variable will be
+//                                          -1
 //
 //      sx_file_writer: Opens a file and writes to it just like stdc file IO
 //              sx_file_open_writer         opens a file for writing, can provide optional optional
@@ -76,17 +82,14 @@ typedef struct sx_mem_block {
     int             align;
 } sx_mem_block;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+SX_API sx_mem_block* sx_mem_create_block(const sx_alloc* alloc, int size,
+                                         const void* data sx_default(NULL),
+                                         int align sx_default(0));
+SX_API sx_mem_block* sx_mem_ref_block(const sx_alloc* alloc, int size, void* data);
+SX_API void          sx_mem_destroy_block(sx_mem_block* mem);
 
-sx_mem_block* sx_mem_create_block(const sx_alloc* alloc, int size, const void* data sx_default(NULL),
-                                  int align sx_default(0));
-sx_mem_block* sx_mem_ref_block(const sx_alloc* alloc, int size, void* data);
-void          sx_mem_destroy_block(sx_mem_block* mem);
-
-void  sx_mem_init_block_ptr(sx_mem_block* mem, void* data, int size);
-void* sx_mem_grow(sx_mem_block* mem, int size);
+SX_API void sx_mem_init_block_ptr(sx_mem_block* mem, void* data, int size);
+SX_API bool sx_mem_grow(sx_mem_block** pmem, int size);
 
 #define sx_define_mem_block_onstack(_name, _size) \
     uint8_t      _name##_buff_[(_size)];          \
@@ -102,12 +105,15 @@ typedef struct sx_mem_writer {
     int64_t       size;
 } sx_mem_writer;
 
-void    sx_mem_init_writer(sx_mem_writer* writer, sx_mem_block* mem);
-int     sx_mem_write(sx_mem_writer* writer, const void* data, int size);
-int64_t sx_mem_seekw(sx_mem_writer* writer, int64_t offset,
-                     sx_whence whence sx_default(SX_WHENCE_CURRENT));
+SX_API void sx_mem_init_writer(sx_mem_writer* writer, const sx_alloc* alloc, int init_size);
+SX_API void sx_mem_release_writer(sx_mem_writer* writer);
+
+SX_API int  sx_mem_write(sx_mem_writer* writer, const void* data, int size);
+SX_API int64_t sx_mem_seekw(sx_mem_writer* writer, int64_t offset,
+                            sx_whence whence sx_default(SX_WHENCE_CURRENT));
 
 #define sx_mem_write_var(w, v) sx_mem_write((w), &(v), sizeof(v))
+#define sx_mem_write_text(w, s) sx_mem_write((w), (s), sx_strlen(s))
 
 // sx_mem_reader
 typedef struct sx_mem_reader {
@@ -116,23 +122,31 @@ typedef struct sx_mem_reader {
     int64_t        top;
 } sx_mem_reader;
 
-void    sx_mem_init_reader(sx_mem_reader* reader, const void* data, int64_t size);
-int     sx_mem_read(sx_mem_reader* reader, void* data, int size);
-int64_t sx_mem_seekr(sx_mem_reader* reader, int64_t offset,
-                     sx_whence whence sx_default(SX_WHENCE_CURRENT));
+SX_API void sx_mem_init_reader(sx_mem_reader* reader, const void* data, int64_t size);
+SX_API int  sx_mem_read(sx_mem_reader* reader, void* data, int size);
+SX_API int64_t sx_mem_seekr(sx_mem_reader* reader, int64_t offset,
+                            sx_whence whence sx_default(SX_WHENCE_CURRENT));
 
-#define sx_mem_read_var(w, v) sx_mem_read((w), &(v), sizeof(v))
+typedef struct sx_iff_chunk {
+    int64_t  pos;
+    uint32_t size;
+} sx_iff_chunk;
+
+SX_API sx_iff_chunk sx_mem_get_iff_chunk(sx_mem_reader* reader, int64_t size, uint32_t fourcc);
+
+#define sx_mem_read_var(r, v) sx_mem_read((r), &(v), sizeof(v))
 
 // sx_file_writer
 typedef struct sx_file_writer {
     sx_align_decl(16, uint8_t) data[16];
 } sx_file_writer;
 
-bool sx_file_open_writer(sx_file_writer* writer, const char* filepath, uint32_t flags sx_default(0));
-void sx_file_close_writer(sx_file_writer* writer);
-int  sx_file_write(sx_file_writer* writer, const void* data, int size);
-int64_t sx_file_seekw(sx_file_writer* writer, int64_t offset,
-                      sx_whence whence sx_default(SX_WHENCE_CURRENT));
+SX_API bool sx_file_open_writer(sx_file_writer* writer, const char* filepath,
+                                uint32_t flags sx_default(0));
+SX_API void sx_file_close_writer(sx_file_writer* writer);
+SX_API int  sx_file_write(sx_file_writer* writer, const void* data, int size);
+SX_API int64_t sx_file_seekw(sx_file_writer* writer, int64_t offset,
+                             sx_whence whence sx_default(SX_WHENCE_CURRENT));
 
 #define sx_file_write_var(w, v) sx_file_write((w), &(v), sizeof(v))
 #define sx_file_write_text(w, s) sx_file_write((w), (s), sx_strlen(s))
@@ -142,17 +156,13 @@ typedef struct sx_file_reader {
     sx_align_decl(16, uint8_t) data[16];
 } sx_file_reader;
 
-bool    sx_file_open_reader(sx_file_reader* reader, const char* filepath);
-void    sx_file_close_reader(sx_file_reader* reader);
-int     sx_file_read(sx_file_reader* reader, void* data, int size);
-int64_t sx_file_seekr(sx_file_reader* reader, int64_t offset,
-                      sx_whence whence sx_default(SX_WHENCE_CURRENT));
+SX_API bool sx_file_open_reader(sx_file_reader* reader, const char* filepath);
+SX_API void sx_file_close_reader(sx_file_reader* reader);
+SX_API int  sx_file_read(sx_file_reader* reader, void* data, int size);
+SX_API int64_t sx_file_seekr(sx_file_reader* reader, int64_t offset,
+                             sx_whence whence sx_default(SX_WHENCE_CURRENT));
 
-sx_mem_block* sx_file_load_text(const sx_alloc* alloc, const char* filepath);
-sx_mem_block* sx_file_load_bin(const sx_alloc* alloc, const char* filepath);
+SX_API sx_mem_block* sx_file_load_text(const sx_alloc* alloc, const char* filepath);
+SX_API sx_mem_block* sx_file_load_bin(const sx_alloc* alloc, const char* filepath);
 
 #define sx_file_read_var(w, v) sx_file_read((w), &(v), sizeof(v))
-
-#ifdef __cplusplus
-}
-#endif

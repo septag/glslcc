@@ -77,11 +77,11 @@ typedef struct sx_alloc {
 } sx_alloc;
 
 // Default allocator: allocate from heap
-SX_API const sx_alloc* sx_alloc_malloc;
+SX_API const sx_alloc* sx_alloc_malloc();
 
 // Leak checking allocator, useful for debug and SX_CONFIG_DEBUG_ALLOCATOR=1
 // sx_alloc* sx_alloc_malloc_leak_detect();
-SX_API const sx_alloc* sx_alloc_malloc_leak_detect;
+SX_API const sx_alloc* sx_alloc_malloc_leak_detect();
 
 typedef void (*sx_dump_leak_cb)(const char* formatted_msg, const char* file, const char* func,
                                 int line, size_t size, void* ptr);
@@ -138,7 +138,7 @@ static inline void* sx__aligned_alloc(const sx_alloc* alloc, size_t size, uint32
     return aligned;
 }
 
-static inline void sx__aligned_free(const sx_alloc* alloc, void* ptr, uint32_t align,
+static inline void sx__aligned_free(const sx_alloc* alloc, void* ptr,
                                     const char* file, const char* func, uint32_t line) {
     uint8_t*  aligned = (uint8_t*)ptr;
     uint32_t* header = (uint32_t*)aligned - 1;

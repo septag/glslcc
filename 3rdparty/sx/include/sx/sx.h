@@ -7,7 +7,6 @@
 //
 #pragma once
 
-#include "config.h"
 #include "macros.h"
 
 #include <assert.h>     // assert
@@ -76,30 +75,30 @@ SX_API void sx__break_program(const char* text);
 
 #ifndef __cplusplus
 #    if SX_COMPILER_GCC || SX_COMPILER_CLANG
-#        define sx_max(a, b)          \
-            ({                        \
-                typeof(a) __a = (a);  \
-                typeof(b) __b = (b);  \
-                (void)(&__a == &__b); \
-                __a > b ? __a : __b;  \
+#        define sx_max(a, b)                  \
+            ({                                \
+                typeof(a) var__a = (a);       \
+                typeof(b) var__b = (b);       \
+                (void)(&var__a == &var__b);   \
+                var__a > b ? var__a : var__b; \
             })
 
-#        define sx_min(a, b)          \
-            ({                        \
-                typeof(a) __a = (a);  \
-                typeof(b) __b = (b);  \
-                (void)(&__a == &__b); \
-                __a < b ? __a : __b;  \
+#        define sx_min(a, b)                  \
+            ({                                \
+                typeof(a) var__a = (a);       \
+                typeof(b) var__b = (b);       \
+                (void)(&var__a == &var__b);   \
+                var__a < b ? var__a : var__b; \
             })
 
-#        define sx_clamp(v_, min_, max_)    \
-            ({                              \
-                typeof(v_) _v = (v_);       \
-                typeof(min_) _min = (min_); \
-                typeof(max_) _max = (max_); \
-                (void)(&_min == &_max);     \
-                _v = _v < _max ? _v : _max; \
-                _v > _min ? _v : _min;      \
+#        define sx_clamp(v_, min_, max_)                        \
+            ({                                                  \
+                typeof(v_) var__v = (v_);                       \
+                typeof(min_) var__min = (min_);                 \
+                typeof(max_) var__max = (max_);                 \
+                (void)(&var__min == &var__max);                 \
+                var__v = var__v < var__max ? var__v : var__max; \
+                var__v > var__min ? var__v : var__min;          \
             })
 #    elif SX_COMPILER_MSVC
 // NOTE: Because we have some features lacking in MSVC+C compiler, the max,min,clamp macros does not

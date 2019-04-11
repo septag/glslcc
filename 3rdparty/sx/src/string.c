@@ -4,12 +4,16 @@
 //
 
 #include "sx/string.h"
+#include "sx/allocator.h"
 #include "sx/array.h"
 
-SX_PRAGMA_DIAGNOSTIC_PUSH();
-SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
 #define STB_SPRINTF_IMPLEMENTATION
 #define STB_SPRINTF_STATIC
+SX_PRAGMA_DIAGNOSTIC_PUSH()
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-parameter")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wsign-compare")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wstrict-aliasing")
 #include "../3rdparty/stb/stb_printf.h"
 SX_PRAGMA_DIAGNOSTIC_POP();
 
@@ -21,7 +25,11 @@ SX_PRAGMA_DIAGNOSTIC_POP();
 //#define STRPOOL_STRNICMP(s1, s2, len)   ( sx_strncmpnocase(s1, s2, len) )
 #define STRPOOL_MALLOC(ctx, size) (sx_malloc((const sx_alloc*)ctx, size))
 #define STRPOOL_FREE(ctx, ptr) (sx_free((const sx_alloc*)ctx, ptr))
+SX_PRAGMA_DIAGNOSTIC_PUSH()
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-parameter")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wsign-compare")
 #include "../3rdparty/mattias/strpool.h"
+SX_PRAGMA_DIAGNOSTIC_POP()
 
 typedef struct sx__printf_ctx_s {
     const sx_alloc* alloc;
@@ -51,6 +59,7 @@ char* sx_snprintf_alloc(const sx_alloc* alloc, const char* fmt, ...) {
 }
 
 static char* sx__vsnprintf_callback(char* buff, void* user, int len) {
+    sx_unused(buff);
     sx__printf_ctx* ctx = (sx__printf_ctx*)user;
     int             len_ = len + 1;    // Reserve one character for null-termination
     sx_array_add(ctx->alloc, ctx->buff, len_);
@@ -395,7 +404,7 @@ bool sx_strequal(const char* SX_RESTRICT a, const char* SX_RESTRICT b) {
     return true;
 }
 
-bool sx_strequalnocase(const char*SX_RESTRICT  a, const char* SX_RESTRICT b) {
+bool sx_strequalnocase(const char* SX_RESTRICT a, const char* SX_RESTRICT b) {
     int alen = sx_strlen(a);
     int blen = sx_strlen(b);
     if (alen != blen)

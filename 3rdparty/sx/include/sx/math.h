@@ -192,69 +192,66 @@ typedef union sx_aabb {
     float f[6];
 } sx_aabb;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+SX_API SX_CONSTFN float sx_floor(float _f);
+SX_API SX_CONSTFN float sx_cos(float _a);
+SX_API SX_CONSTFN float sx_acos(float _a);
+SX_API SX_CONSTFN float sx_sin(float _a);
+SX_API SX_CONSTFN float sx_asin(float _a);
+SX_API SX_CONSTFN float sx_atan2(float _y, float _x);
+SX_API SX_CONSTFN float sx_exp(float _a);
+SX_API SX_CONSTFN float sx_log(float _a);
+SX_API SX_CONSTFN float sx_sqrt(float _a);
+SX_API SX_CONSTFN float sx_rsqrt(float _a);
 
-SX_CONSTFN float sx_floor(float _f);
-SX_CONSTFN float sx_cos(float _a);
-SX_CONSTFN float sx_acos(float _a);
-SX_CONSTFN float sx_sin(float _a);
-SX_CONSTFN float sx_asin(float _a);
-SX_CONSTFN float sx_atan2(float _y, float _x);
-SX_CONSTFN float sx_exp(float _a);
-SX_CONSTFN float sx_log(float _a);
-SX_CONSTFN float sx_sqrt(float _a);
-SX_CONSTFN float sx_rsqrt(float _a);
+SX_API sx_vec3 sx_vec3_calc_normal(const sx_vec3 _va, const sx_vec3 _vb, const sx_vec3 _vc);
+SX_API sx_vec4 sx_vec3_calc_plane(const sx_vec3 _va, const sx_vec3 _vb, const sx_vec3 _vc);
+SX_API sx_vec2 sx_vec2_calc_linearfit2D(const sx_vec2* _points, int _num);
+SX_API sx_vec3 sx_vec3_calc_linearfit3D(const sx_vec3* _points, int _num);
 
-sx_vec3 sx_vec3_calc_normal(const sx_vec3 _va, const sx_vec3 _vb, const sx_vec3 _vc);
-sx_vec4 sx_vec3_calc_plane(const sx_vec3 _va, const sx_vec3 _vb, const sx_vec3 _vc);
-sx_vec2 sx_vec2_calc_linearfit2D(const sx_vec2* _points, int _num);
-sx_vec3 sx_vec3_calc_linearfit3D(const sx_vec3* _points, int _num);
-
-sx_mat4 sx_mat4_from_normal(const sx_vec3 _normal, float _scale, const sx_vec3 _pos);
-sx_mat4 sx_mat4_from_normal_angle(const sx_vec3 _normal, float _scale, const sx_vec3 _pos,
-                                  float _angle);
-sx_mat4 sx_mat4_view_lookat(const sx_vec3 eye, const sx_vec3 target, const sx_vec3 up);
-sx_mat4 sx_mat4_view_lookatLH(const sx_vec3 eye, const sx_vec3 target, const sx_vec3 up);
+SX_API sx_mat4 sx_mat4_from_normal(const sx_vec3 _normal, float _scale, const sx_vec3 _pos);
+SX_API sx_mat4 sx_mat4_from_normal_angle(const sx_vec3 _normal, float _scale, const sx_vec3 _pos,
+                                         float _angle);
+SX_API sx_mat4 sx_mat4_view_lookat(const sx_vec3 eye, const sx_vec3 target, const sx_vec3 up);
+SX_API sx_mat4 sx_mat4_view_lookatLH(const sx_vec3 eye, const sx_vec3 target, const sx_vec3 up);
 // https://www.3dgep.com/understanding-the-view-matrix/
-sx_mat4 sx_mat4_view_FPS(const sx_vec3 eye, float pitch, float yaw);
-sx_mat4 sx_mat4_view_arcball(const sx_vec3 move, const sx_quat rot, const sx_vec3 target_pos);
+SX_API sx_mat4 sx_mat4_view_FPS(const sx_vec3 eye, float pitch, float yaw);
+SX_API sx_mat4 sx_mat4_view_arcball(const sx_vec3 move, const sx_quat rot,
+                                    const sx_vec3 target_pos);
 // https://docs.microsoft.com/en-us/windows/desktop/direct3d9/d3dxmatrixperspectivefovlh
-sx_mat4 sx_mat4_perspective(float width, float height, float zn, float zf, bool ogl_ndc);
-sx_mat4 sx_mat4_perspectiveLH(float width, float height, float zn, float zf, bool ogl_ndc);
-sx_mat4 sx_mat4_perspective_offcenter(float xmin, float ymin, float xmax, float ymax, float zn,
-                                      float zf, bool ogl_ndc);
-sx_mat4 sx_mat4_perspective_offcenterLH(float xmin, float ymin, float xmax, float ymax, float zn,
-                                        float zf, bool ogl_ndc);
-sx_mat4 sx_mat4_perspectiveFOV(float fov_y, float aspect, float zn, float zf, bool ogl_ndc);
-sx_mat4 sx_mat4_perspectiveFOV_LH(float fov_y, float aspect, float zn, float zf, bool ogl_ndc);
-sx_mat4 sx_mat4_ortho(float width, float height, float zn, float zf, float offset, bool ogl_ndc);
-sx_mat4 sx_mat4_orthoLH(float width, float height, float zn, float zf, float offset, bool ogl_ndc);
-sx_mat4 sx_mat4_ortho_offcenter(float xmin, float ymin, float xmax, float ymax, float zn, float zf,
-                                float offset, bool ogl_ndc);
-sx_mat4 sx_mat4_ortho_offcenterLH(float xmin, float ymin, float xmax, float ymax, float zn,
-                                  float zf, float offset, bool ogl_ndc);
-sx_mat4 sx_mat4_SRT(float _sx, float _sy, float _sz, float _ax, float _ay, float _az, float _tx,
-                    float _ty, float _tz);
-sx_mat4 sx_mat4_mul(const sx_mat4* _a, const sx_mat4* _b);
-sx_mat4 sx_mat4_inv(const sx_mat4* _a);
+SX_API sx_mat4 sx_mat4_perspective(float width, float height, float zn, float zf, bool ogl_ndc);
+SX_API sx_mat4 sx_mat4_perspectiveLH(float width, float height, float zn, float zf, bool ogl_ndc);
+SX_API sx_mat4 sx_mat4_perspective_offcenter(float xmin, float ymin, float xmax, float ymax,
+                                             float zn, float zf, bool ogl_ndc);
+SX_API sx_mat4 sx_mat4_perspective_offcenterLH(float xmin, float ymin, float xmax, float ymax,
+                                               float zn, float zf, bool ogl_ndc);
+SX_API sx_mat4 sx_mat4_perspectiveFOV(float fov_y, float aspect, float zn, float zf, bool ogl_ndc);
+SX_API sx_mat4 sx_mat4_perspectiveFOV_LH(float fov_y, float aspect, float zn, float zf,
+                                         bool ogl_ndc);
+SX_API sx_mat4 sx_mat4_ortho(float width, float height, float zn, float zf, float offset,
+                             bool ogl_ndc);
+SX_API sx_mat4 sx_mat4_orthoLH(float width, float height, float zn, float zf, float offset,
+                               bool ogl_ndc);
+SX_API sx_mat4 sx_mat4_ortho_offcenter(float xmin, float ymin, float xmax, float ymax, float zn,
+                                       float zf, float offset, bool ogl_ndc);
+SX_API sx_mat4 sx_mat4_ortho_offcenterLH(float xmin, float ymin, float xmax, float ymax, float zn,
+                                         float zf, float offset, bool ogl_ndc);
+SX_API sx_mat4 sx_mat4_SRT(float _sx, float _sy, float _sz, float _ax, float _ay, float _az,
+                           float _tx, float _ty, float _tz);
+SX_API sx_mat4 sx_mat4_mul(const sx_mat4* _a, const sx_mat4* _b);
+SX_API sx_mat4 sx_mat4_inv(const sx_mat4* _a);
 /// Inverse for transform-only matrices (column4=0) (mat4x)
-sx_mat4 sx_mat4x_inv(const sx_mat4* _a);
-sx_quat sx_mat4_quat(const sx_mat4* _mat);
-sx_mat4 sx_mat4_project_plane(const sx_vec3 plane_normal);
+SX_API sx_mat4 sx_mat4x_inv(const sx_mat4* _a);
+SX_API sx_quat sx_mat4_quat(const sx_mat4* _mat);
+SX_API sx_mat4 sx_mat4_project_plane(const sx_vec3 plane_normal);
 
-sx_mat3 sx_mat3_inv(const sx_mat3* _a);
-sx_mat3 sx_mat3_mul(const sx_mat3* _a, const sx_mat3* _b);
+SX_API sx_mat3 sx_mat3_inv(const sx_mat3* _a);
+SX_API sx_mat3 sx_mat3_mul(const sx_mat3* _a, const sx_mat3* _b);
 
-sx_mat4 sx_quat_mat4(const sx_quat quat);
+SX_API sx_mat4 sx_quat_mat4(const sx_quat quat);
 
-void sx_color_RGBtoHSV(float _hsv[3], const float _rgb[3]);
-void sx_color_HSVtoRGB(float _rgb[3], const float _hsv[3]);
+SX_API void sx_color_RGBtoHSV(float _hsv[3], const float _rgb[3]);
+SX_API void sx_color_HSVtoRGB(float _rgb[3], const float _hsv[3]);
 
-#ifdef __cplusplus
-}
-#endif
 
 // https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
 static inline SX_CONSTFN int sx_nearest_pow2(int n) {
@@ -362,7 +359,8 @@ static inline SX_CONSTFN float sx_ceil(float _f) {
 }
 
 static inline SX_CONSTFN float sx_lerp(float _a, float _b, float _t) {
-    return _a + (_b - _a) * _t;
+    // this version is more precise than: _a + (_b - _a) * _t
+    return (1.0f - _t) * _a + _t * _b;
 }
 
 static inline SX_CONSTFN float sx_sign(float _a) {
@@ -431,6 +429,8 @@ static inline SX_CONSTFN float sx_mod(float _a, float _b) {
 }
 
 // http://realtimecollisiondetection.net/blog/?t=89
+SX_PRAGMA_DIAGNOSTIC_PUSH()
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wshadow")
 static inline SX_CONSTFN bool sx_equal(float _a, float _b, float _epsilon) {
     const float lhs = sx_abs(_a - _b);
     float       aa = sx_abs(_a);
@@ -438,6 +438,7 @@ static inline SX_CONSTFN bool sx_equal(float _a, float _b, float _epsilon) {
     const float rhs = _epsilon * sx_max(1.0f, sx_max(aa, ab));
     return lhs <= rhs;
 }
+SX_PRAGMA_DIAGNOSTIC_POP()
 
 static inline SX_CONSTFN bool sx_equal_arr(const float* _a, const float* _b, int _num,
                                            float _epsilon) {
@@ -643,7 +644,7 @@ static inline sx_quat sx_quat4f(float _x, float _y, float _z, float _w) {
 
 static inline sx_quat sx_quatfv(const float* _f) {
 #ifdef __cplusplus
-    return { { _f[0], _f[1], _f[2] } };
+    return { { _f[0], _f[1], _f[2], _f[3] } };
 #else
     return (sx_quat){ .x = _f[0], .y = _f[1], .z = _f[2], .w = _f[3] };
 #endif
@@ -995,7 +996,6 @@ static inline sx_mat4 sx_mat4_rotateZ(float _az) {
 }
 
 static inline sx_mat4 sx_mat4_rotateXY(float _ax, float _ay) {
-    // TODO: maybe wrong
     const float sx = sx_sin(_ax);
     const float cx = sx_cos(_ax);
     const float sy = sx_sin(_ay);
@@ -1006,7 +1006,6 @@ static inline sx_mat4 sx_mat4_rotateXY(float _ax, float _ay) {
 }
 
 static inline sx_mat4 sx_mat4_rotateXYZ(float _ax, float _ay, float _az) {
-    // TODO: maybe wrong
     const float sx = sx_sin(_ax);
     const float cx = sx_cos(_ax);
     const float sy = sx_sin(_ay);
@@ -1020,7 +1019,6 @@ static inline sx_mat4 sx_mat4_rotateXYZ(float _ax, float _ay, float _az) {
 }
 
 static inline sx_mat4 sx_mat4_rotateZYX(float _ax, float _ay, float _az) {
-    // TODO: maybe wrong
     const float sx = sx_sin(_ax);
     const float cx = sx_cos(_ax);
     const float sy = sx_sin(_ay);
@@ -1206,17 +1204,17 @@ static inline sx_vec2 sx_mat3_mul_vec2(const sx_mat3* _mat, const sx_vec2 _vec) 
                     _vec.x * _mat->m21 + _vec.y * _mat->m22 + _mat->m23);
 }
 
-static inline sx_mat3 sx_mat3_translate(float* result, float x, float y) {
+static inline sx_mat3 sx_mat3_translate(float x, float y) {
     return sx_mat3f(1.0f, 0.0f, x, 0.0f, 1.0f, y, 0.0f, 0.0f, 1.0f);
 }
 
-static inline sx_mat3 sx_mat3_rotate(float* result, float theta) {
+static inline sx_mat3 sx_mat3_rotate(float theta) {
     float c = sx_cos(theta);
     float s = sx_sin(theta);
     return sx_mat3f(c, -s, 0.0f, s, c, 0.0f, 0.0f, 0.0f, 1.0f);
 }
 
-static inline sx_mat3 sx_mat3_scale(float* result, float sx, float sy) {
+static inline sx_mat3 sx_mat3_scale(float sx, float sy) {
     return sx_mat3f(sx, 0.0f, 0.0f, 0.0f, sy, 0.0f, 0.0f, 0.0f, 1.0f);
 }
 
@@ -1306,6 +1304,14 @@ static inline sx_ivec2 sx_ivec2_sub(const sx_ivec2 _a, const sx_ivec2 _b) {
     return sx_ivec2i(_a.x - _b.x, _a.y - _b.y);
 }
 
+static inline sx_ivec2 sx_ivec2_min(const sx_ivec2 _a, const sx_ivec2 _b) {
+    return sx_ivec2i(sx_min(_a.x, _b.x), sx_min(_a.y, _b.y));
+}
+
+static inline sx_ivec2 sx_ivec2_max(const sx_ivec2 _a, const sx_ivec2 _b) {
+    return sx_ivec2i(sx_max(_a.x, _b.x), sx_max(_a.y, _b.y));
+}
+
 static inline sx_rect sx_rectf(float _xmin, float _ymin, float _xmax, float _ymax) {
 #ifdef __cplusplus
     return { { _xmin, _ymin, _xmax, _ymax } };
@@ -1342,6 +1348,30 @@ static inline bool sx_rect_test_rect(const sx_rect rc1, const sx_rect rc2) {
     if (rc1.ymax < rc2.ymin || rc1.ymin > rc2.ymax)
         return false;
     return true;
+}
+
+static inline void sx_rect_add_point(sx_rect* rc, const sx_vec2 pt) {
+    rc->vmin = sx_vec2_min(rc->vmin, pt);
+    rc->vmax = sx_vec2_max(rc->vmax, pt);
+}
+
+/*
+ *   2               3
+ *   -----------------
+ *   |               |
+ *   |               |
+ *   |               |
+ *   |               |
+ *   |               |
+ *   -----------------
+ *   0               1
+ */
+static inline sx_vec2 sx_rect_corner(const sx_rect* rc, int index) {
+    return sx_vec2f((index & 1) ? rc->xmax : rc->xmin, (index & 2) ? rc->ymax : rc->ymin);
+}
+
+static inline void sx_rect_corners(sx_vec2 corners[4], const sx_rect* rc) {
+    for (int i = 0; i < 4; i++) corners[0] = sx_rect_corner(rc, i);
 }
 
 static inline sx_irect sx_irecti(int _xmin, int _ymin, int _xmax, int _ymax) {
@@ -1381,6 +1411,11 @@ static inline bool sx_irect_test_rect(const sx_irect rc1, const sx_irect rc2) {
     if (rc1.ymax < rc2.ymin || rc1.ymin > rc2.ymax)
         return false;
     return true;
+}
+
+static inline void sx_irect_add_point(sx_irect* rc, const sx_ivec2 pt) {
+    rc->vmin = sx_ivec2_min(rc->vmin, pt);
+    rc->vmax = sx_ivec2_max(rc->vmax, pt);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

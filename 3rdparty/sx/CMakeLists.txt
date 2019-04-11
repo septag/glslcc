@@ -99,10 +99,6 @@ if (EMSCRIPTEN)
     list(REMOVE_ITEM SOURCE_FILES include/sx/fiber.h)
 endif()
 
-if (APPLE)
-    list(APPEND SOURCE_FILES src/os.m)
-endif()
-
 ####################################################################################################
 # Assembly files for fcontext
 if (APPLE)
@@ -198,8 +194,6 @@ if (ANDROID)
     target_link_libraries(sx PUBLIC dl pthread m cpufeatures)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
     target_link_libraries(sx PUBLIC dl pthread m)
-elseif (APPLE)
-    target_link_libraries(sx PUBLIC "-framework Foundation")
 elseif (WIN32)
     target_link_libraries(sx PUBLIC psapi)
 endif()
