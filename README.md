@@ -138,7 +138,7 @@ glslcc shader.vert shader.frag --output=shader --lang=hlsl
 To only validate a specific shader (useful for tools and IDEs), use `--validate` flag, with your specified output error format. By default, on windows, it outputs msvc's error format and on other platforms outputs gcc's error format (TODO), and only _glslang_'s format if explicitly defined:
 
 ```
-glslcc shader.vert --output=shader
+glslcc shader.vert --validate
 ```
 
 #### Reflection data
