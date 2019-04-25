@@ -21,6 +21,7 @@
 //      1.4.5       Improved binary header writer to uint32_t
 //      1.5.0       Sgs format is now IFF like
 //      1.5.1       updated sx lib
+//      1.6.0       shader validation, output custom compiler error formats
 //
 #define _ALLOW_KEYWORD_MACROS
 
@@ -66,8 +67,8 @@
 #include "../3rdparty/sjson/sjson.h"
 
 #define VERSION_MAJOR  1
-#define VERSION_MINOR  5
-#define VERSION_SUB    1
+#define VERSION_MINOR  6
+#define VERSION_SUB    0
 
 static const sx_alloc* g_alloc = sx_alloc_malloc();
 static sgs_file* g_sgs         = nullptr;
@@ -85,6 +86,12 @@ enum shader_lang
     SHADER_LANG_MSL,
     SHADER_LANG_GLSL,
     SHADER_LANG_COUNT
+};
+
+enum output_error_format 
+{
+    OUTPUT_ERRORFORMAT_GLSLANG = 0,
+    OUTPUT_ERRORFORMAT_MSVC 
 };
 
 static const char* k_shader_types[SHADER_LANG_COUNT] = {
@@ -276,6 +283,8 @@ struct cmd_args
     int         compile_bin;
     int         debug_bin;
     int         silent;
+    int         validate;
+    output_error_format err_format;
     const char* cvar;
     const char* reflect_filepath;
 };
@@ -312,6 +321,16 @@ static shader_lang parse_shader_lang(const char* arg)
 
     puts("Invalid shader type");
     exit(-1);
+}
+
+static output_error_format parse_output_errorformat(const char* arg) {
+    if (sx_strequalnocase(arg, "msvc")) {
+        return OUTPUT_ERRORFORMAT_MSVC;
+    } else if (sx_strequalnocase(arg, "glslang")) {
+        return OUTPUT_ERRORFORMAT_GLSLANG;
+    }
+
+    return OUTPUT_ERRORFORMAT_GLSLANG;
 }
 
 static void parse_defines(cmd_args* args, const char* defines)
@@ -1310,6 +1329,67 @@ struct compile_file_desc
         glslang::FinalizeProcess();     \
         return _code;                   
 
+struct output_parse_result {
+    std::string file;
+    std::string err;
+    int line;
+};
+
+static bool parse_output_log(const char* str, std::vector<output_parse_result>* r) {
+    const char* header = "ERROR: ";
+    while (sx_strstr(str, header) == str) {
+        str += sx_strlen(header);
+        const char* divider = sx_strchar(str, ':');
+        if (!divider)
+            return r->size() > 0;
+        output_parse_result lr;
+
+        if (SX_PLATFORM_WINDOWS && divider == str + 1)
+            divider = sx_strchar(divider + 1, ':');
+        // sx_strncpy(file, file_sz, str, (intptr_t)(divider - str));
+        lr.file.assign(str, divider);
+        lr.line = sx_toint(divider + 1);
+        const char* next_divider = sx_strchar(divider + 1, ':');
+        sx_assert(next_divider);
+        // sx_strcpy(desc, desc_sz, next_divider + 1);
+        const char* line_sep = sx_strchar(next_divider + 1, '\n');
+        std::string err;
+        if (line_sep) {
+            lr.err.assign(next_divider + 1, line_sep);
+            str = line_sep + 1;
+        } else {
+            lr.err.assign(next_divider + 1);
+            str += err.length();
+        }
+
+        r->push_back(lr);
+    }
+    return true;
+}
+
+static void output_error(const char* err_str, const cmd_args& args, const char* filename) {
+    if (err_str && err_str[0]) {
+        std::vector<output_parse_result> lines;
+        parse_output_log(err_str, &lines);
+        if (args.err_format == OUTPUT_ERRORFORMAT_GLSLANG) {
+            fprintf(stdout, "%s\n", filename);
+            for (std::vector<output_parse_result>::iterator il = lines.begin(); 
+                il != lines.end(); ++il) 
+            {
+                fprintf(stdout, "ERROR: 0:%d:%s\n", il->line, il->err.c_str());
+            }
+        } else if (args.err_format == OUTPUT_ERRORFORMAT_MSVC) {
+            for (std::vector<output_parse_result>::iterator il = lines.begin(); 
+                il != lines.end(); ++il) 
+            {
+                char fullpath[256];
+                sx_os_path_abspath(fullpath, sizeof(fullpath), il->file.c_str());
+                fprintf(stderr, "%s(%d,0): error:%s\n", fullpath, il->line, il->err.c_str());
+            }
+        }
+    }
+}
+
 static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
 {
     auto destroy_shaders = [](glslang::TShader**& shaders) {
@@ -1386,8 +1466,6 @@ static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
         shader->setInvertY(args.invert_y ? true : false);
         shader->setEnvInput(glslang::EShSourceGlsl, files[i].stage, glslang::EShClientVulkan, default_version);
         shader->setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_1);
-        //shader->setEnvInput(glslang::EShSourceGlsl, files[i].stage, glslang::EShClientOpenGL, default_version);
-        //shader->setEnvClient(glslang::EShClientOpenGL, glslang::EShTargetOpenGL_450);
         shader->setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_0);
         add_defines(shader, args, def);
 
@@ -1401,35 +1479,26 @@ static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
                 puts(prep_str.c_str());
                 puts("");
             } else {
-                const char* info_log = shader->getInfoLog();
-                const char* info_log_dbg = shader->getInfoDebugLog();
-                if (info_log && info_log[0])
-                    fprintf(stderr, "%s\n", info_log);
-                if (info_log_dbg && info_log_dbg[0])
-                    fprintf(stderr, "%s\n", info_log_dbg);
+                output_error(shader->getInfoLog(), args, files[i].filename);
                 sx_mem_destroy_block(mem);
                 compile_files_ret(-1);
             }
         } else {
             if (!shader->parse(&limits_conf, default_version, false, messages, args.includer)) {
-                const char* info_log = shader->getInfoLog();
-                const char* info_log_dbg = shader->getInfoDebugLog();
-                if (info_log && info_log[0])
-                    fprintf(stderr, "%s\n", info_log);
-                if (info_log_dbg && info_log_dbg[0])
-                    fprintf(stderr, "%s\n", info_log_dbg);
+                output_error(shader->getInfoLog(), args, files[i].filename);
                 sx_mem_destroy_block(mem);
                 compile_files_ret(-1);
             }
 
-            prog->addShader(shader);
+            if (!args.validate)
+                prog->addShader(shader);
         }
 
         sx_mem_destroy_block(mem);
     }   // foreach (file)
 
     // In preprocess mode, do not link, just exit
-    if (args.preprocess) {
+    if (args.preprocess || args.validate) {
         compile_files_ret(0);
     }
 
@@ -1468,10 +1537,23 @@ static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
     return 0;
 }
 
+static void detect_input_file(cmd_args* args, const char* file) {
+    char ext[32];
+    sx_os_path_ext(ext, sizeof(ext), file);
+    if (sx_strequalnocase(ext, ".vert")) {
+        args->vs_filepath = file;
+    } else if (sx_strequalnocase(ext, ".frag")) {
+        args->fs_filepath = file;
+    } else if (sx_strequalnocase(ext, ".comp")) {
+        args->cs_filepath = file;
+    }
+}
+
 int main(int argc, char* argv[])
 {
     cmd_args args = {};
     args.lang = SHADER_LANG_COUNT;
+    args.err_format = SX_PLATFORM_WINDOWS ? OUTPUT_ERRORFORMAT_MSVC : OUTPUT_ERRORFORMAT_GLSLANG;
 
     int version = 0;
     int dump_conf = 0;
@@ -1497,6 +1579,9 @@ int main(int argc, char* argv[])
         {"bin", 'b', SX_CMDLINE_OPTYPE_FLAG_SET, &args.compile_bin, 1, "Compile to bytecode instead of source. requires ENABLE_D3D11_COMPILER build flag", 0x0},
         {"debug-bin", 'g', SX_CMDLINE_OPTYPE_FLAG_SET, &args.debug_bin, 1, "Generate debug info for binary compilation, should come with --bin", 0x0},
         {"silent", 'S', SX_CMDLINE_OPTYPE_FLAG_SET, &args.silent, 1, "Does not output filename(s) after compile success"},
+        {"input", 'i', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'i', "Input shader source file. determined by extension (.vert/.frag/.comp)", 0x0},
+        {"validate", '0', SX_CMDLINE_OPTYPE_FLAG_SET, &args.validate, 1, "Only performs shader validatation and error checking", 0x0},
+        {"err-format", 'E', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'E', "Output error format", "glslang/msvc"},
         SX_CMDLINE_OPT_END
     };
     sx_cmdline_context* cmdline = sx_cmdline_create_context(g_alloc, argc, (const char**)argv, opts);
@@ -1505,7 +1590,7 @@ int main(int argc, char* argv[])
     const char* arg;
     while ((opt = sx_cmdline_next(cmdline, NULL, &arg)) != -1) {
         switch (opt) {
-            case '+': printf("Got argument without flag: %s\n", arg);           break;
+            case '+': detect_input_file(&args, arg);                            break;
             case '?': printf("Unknown argument: %s\n", arg);         exit(-1);  break;
             case '!': printf("Invalid use of argument: %s\n", arg);  exit(-1);  break;
             case 'v': args.vs_filepath = arg;                                   break;
@@ -1519,6 +1604,8 @@ int main(int argc, char* argv[])
             case 'I': parse_includes(&args, arg);                               break;
             case 'N': args.cvar = arg;                                          break;
             case 'r': args.reflect_filepath = arg;  args.reflect = 1;           break;
+            case 'i': detect_input_file(&args, arg);                            break;
+            case 'E': args.err_format = parse_output_errorformat(arg);          break;            
             default:                                                            break;
         }
     }
@@ -1551,12 +1638,12 @@ int main(int argc, char* argv[])
         exit(-1);
     }
 
-    if (args.out_filepath == nullptr && !args.preprocess) {
+    if (args.out_filepath == nullptr && !(args.preprocess | args.validate)) {
         puts("Output file is not specified");
         exit(-1);
     }
 
-    if (args.lang == SHADER_LANG_COUNT && !args.preprocess) {
+    if (args.lang == SHADER_LANG_COUNT && !(args.preprocess | args.validate)) {
         puts("Shader language is not specified");
         exit(-1);
     }
@@ -1601,7 +1688,7 @@ int main(int argc, char* argv[])
 #endif
 
 
-    if (args.sgs_file && !args.preprocess) {
+    if (args.sgs_file && !(args.preprocess|args.validate)) {
         uint32_t slang = 0;
         switch (args.lang) {
             case SHADER_LANG_GLES:  slang = SGS_LANG_GLES;    break;

@@ -28,7 +28,38 @@ _glslcc_ uses CMake. built and tested on:
   
 ### Usage
 
-I'll have to write a more detailed documentation but for now checkout ```glslcc --help``` for command line options.  
+I'll have to write a more detailed documentation but for these are the arguments: (```glslcc --help```)
+
+```
+-h --help                           - Print this help text
+-V --version                        - Print version
+-v --vert=<Filepath>                - Vertex shader source file
+-f --frag=<Filepath>                - Fragment shader source file
+-c --compute=<Filepath>             - Compute shader source file
+-o --output=<Filepath>              - Output file
+-l --lang=<gles/msl/hlsl/glsl>      - Convert to shader language
+-D --defines(=Defines)              - Preprocessor definitions, seperated by comma or ';'
+-Y --invert-y                       - Invert position.y in vertex shader
+-p --profile=<ProfileVersion>       - Shader profile version (HLSL: 40, 50, 60), (ES: 200, 300), (GLSL: 330, 400, 420)
+-C --dumpc                          - Dump shader limits configuration
+-I --include-dirs=<Directory(s)>    - Set include directory for <system> files, seperated by ';'
+-P --preprocess                     - Dump preprocessed result to terminal
+-N --cvar=<VariableName>            - Outputs Hex data to a C include file with a variable name
+-F --flatten-ubos                   - Flatten UBOs, useful for ES2 shaders
+-r --reflect(=Filepath)             - Output shader reflection information to a json file
+-G --sgs                            - Output file should be packed SGS format
+-b --bin                            - Compile to bytecode instead of source. requires ENABLE_D3D11_COMPILER build flag
+-g --debug-bin                      - Generate debug info for binary compilation, should come with --bin
+-S --silent                         - Does not output filename(s) after compile success
+-i --input=<(null)>                 - Input shader source file. determined by extension (.vert/.frag/.comp)
+-0 --validate                       - Only performs shader validatation and error checking
+-E --err-format=<glslang/msvc>      - Output error format
+
+Current supported shader stages are:
+        - Vertex shader (--vert)
+        - Fragment shader (--frag)
+        - Compute shader (--comp)
+```
 
 Here's some examples:  
 
@@ -98,6 +129,18 @@ This command does the same thing, but outputs all the data to a C header file *s
 glslcc --vert=shader.vert --frag=shader.frag --output=shader.h --lang=hlsl --reflect --cvar=g_shader --defines=HLSL:1,USE_TEXTURE3D:1
 ```
 
+You can also pass files without explicitly defining input shaders in arguments. their shader type will be resolved by checking their file extensions. So `.vert`=vertex-shader, `.frag`=fragment-shader, `.comp`=compute-shader
+
+```
+glslcc shader.vert shader.frag --output=shader --lang=hlsl
+```
+
+To only validate a specific shader (useful for tools and IDEs), use `--validate` flag, with your specified output error format. By default, on windows, it outputs msvc's error format and on other platforms outputs gcc's error format (TODO), and only _glslang_'s format if explicitly defined:
+
+```
+glslcc shader.vert --output=shader
+```
+
 #### Reflection data
 Reflection data comes in form of json files and activated with ```--reflect``` option. It includes all the information that you need to link your 3d Api to the shader
 
@@ -130,6 +173,13 @@ The blocks are composed of a uint32_t fourcc code + uint32_t variable defining t
 			- `struct sgs_refl_uniform_buffer[]`: array of uniform buffer objects, if exists (see `sgs_chunk_refl` for number of uniform buffers)
 			- `struct sgs_refl_texture[]`: array of texture objects, if exists (see `sgs_chunk_refl` for number of textures)
 
+### MSVC integration
+
+If you happen to work with msvc 2017 and higher, there is this extension called [GLSL language integration](https://marketplace.visualstudio.com/items?itemName=DanielScherzer.GLSL) ([github](https://github.com/danielscherzer/GLSL)) that this compiler is compatible with, so it can perform automating error checking in your editor. use these parameters in extensions's config:  
+
+```
+glslcc -0 -E glslang
+```
 
 ### D3D11 Compiler
 There is a support for compiling d3d11 shaders (ps_5_0, vs_5_0, cs_5_0) into D3D11 byte-code instead of HLSL source code. On windows with Windows SDK, set ```ENABLE_D3D11_COMPILER=ON``` flag for cmake, build the project and use ```--bin``` in the command line arguments to generate binary byte-code file.
