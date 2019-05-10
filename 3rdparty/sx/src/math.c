@@ -2,6 +2,10 @@
 // Copyright 2018 Sepehr Taghdisian (septag@github). All rights reserved.
 // License: https://github.com/septag/sx#license-bsd-2-clause
 //
+// parts of this code is copied from bx library: https://github.com/bkaradzic/bx
+// Copyright 2011-2019 Branimir Karadzic. All rights reserved.
+// License: https://github.com/bkaradzic/bx#license-bsd-2-clause
+//
 #include "sx/math.h"
 
 #if SX_CONFIG_STDMATH
@@ -683,9 +687,9 @@ void sx_color_HSVtoRGB(float _rgb[3], const float _hsv[3]) {
     const float py = sx_abs(sx_fract(hh + 2.0f / 3.0f) * 6.0f - 3.0f);
     const float pz = sx_abs(sx_fract(hh + 1.0f / 3.0f) * 6.0f - 3.0f);
 
-    _rgb[0] = vv * sx_lerp(1.0f, sx_clamp(px - 1.0f, 0.0f, 1.0f), ss);
-    _rgb[1] = vv * sx_lerp(1.0f, sx_clamp(py - 1.0f, 0.0f, 1.0f), ss);
-    _rgb[2] = vv * sx_lerp(1.0f, sx_clamp(pz - 1.0f, 0.0f, 1.0f), ss);
+    _rgb[0] = vv * sx_lerp(1.0f, sx_saturate(px - 1.0f), ss);
+    _rgb[1] = vv * sx_lerp(1.0f, sx_saturate(py - 1.0f), ss);
+    _rgb[2] = vv * sx_lerp(1.0f, sx_saturate(pz - 1.0f), ss);
 }
 
 sx_mat3 sx_mat3_mul(const sx_mat3* _a, const sx_mat3* _b) {
