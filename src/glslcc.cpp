@@ -22,6 +22,7 @@
 //      1.5.0       Sgs format is now IFF like
 //      1.5.1       updated sx lib
 //      1.6.0       shader validation, output custom compiler error formats
+//      1.61.0      gcc output error format
 //
 #define _ALLOW_KEYWORD_MACROS
 
@@ -67,7 +68,7 @@
 #include "../3rdparty/sjson/sjson.h"
 
 #define VERSION_MAJOR  1
-#define VERSION_MINOR  6
+#define VERSION_MINOR  61
 #define VERSION_SUB    0
 
 static const sx_alloc* g_alloc = sx_alloc_malloc();
@@ -91,7 +92,8 @@ enum shader_lang
 enum output_error_format 
 {
     OUTPUT_ERRORFORMAT_GLSLANG = 0,
-    OUTPUT_ERRORFORMAT_MSVC 
+    OUTPUT_ERRORFORMAT_MSVC,
+    OUTPUT_ERRORFORMAT_GCC
 };
 
 static const char* k_shader_types[SHADER_LANG_COUNT] = {
@@ -1386,6 +1388,14 @@ static void output_error(const char* err_str, const cmd_args& args, const char* 
                 sx_os_path_abspath(fullpath, sizeof(fullpath), il->file.c_str());
                 fprintf(stderr, "%s(%d,0): error:%s\n", fullpath, il->line, il->err.c_str());
             }
+        } else if (args.err_format == OUTPUT_ERRORFORMAT_GCC) {
+            for (std::vector<output_parse_result>::iterator il = lines.begin(); 
+                il != lines.end(); ++il) 
+            {
+                char fullpath[256];
+                sx_os_path_abspath(fullpath, sizeof(fullpath), il->file.c_str());
+                fprintf(stderr, "%s:%d:0: error:%s\n", fullpath, il->line, il->err.c_str());
+            }
         }
     }
 }
@@ -1553,7 +1563,7 @@ int main(int argc, char* argv[])
 {
     cmd_args args = {};
     args.lang = SHADER_LANG_COUNT;
-    args.err_format = SX_PLATFORM_WINDOWS ? OUTPUT_ERRORFORMAT_MSVC : OUTPUT_ERRORFORMAT_GLSLANG;
+    args.err_format = SX_PLATFORM_WINDOWS ? OUTPUT_ERRORFORMAT_MSVC : OUTPUT_ERRORFORMAT_GCC;
 
     int version = 0;
     int dump_conf = 0;
