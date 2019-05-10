@@ -155,7 +155,7 @@ POSITION, NORMAL, TEXCOORD0, TEXCOORD1, TEXCOORD2, TEXCOORD3, TEXCOORD4, TEXCOOR
 SV_Target0, SV_Target1, SV_Target2, SV_Target3
 ```
 
-### SGK file format
+### SGS file format
 
 There is also an option for exporting to .sgs files *(--sgs)* which is a simple IFF like binary format to hold all shaders (vs + fs + cs) with their reflection inside a binary blob. 
 Check out [sgs-file.h](https://github.com/septag/glslcc/blob/master/src/sgs-file.h) for the file format spec and headers.
