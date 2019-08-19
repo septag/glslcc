@@ -1,0 +1,4 @@
+source: spirv_glsl.cpp, func: CompilerGLSL::emit_header():
+    if (options.es && options.version > 200) {
+        statement("#version ", options.version, options.es && options.version > 100 ? " es" : "");
+    } 

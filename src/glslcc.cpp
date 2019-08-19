@@ -23,6 +23,7 @@
 //      1.5.1       updated sx lib
 //      1.6.0       shader validation, output custom compiler error formats
 //      1.61.0      gcc output error format
+//      1.62.0      removed "#version 200 es" inclusion from spirv_glsl.cpp, 330 default for GLSL
 //
 #define _ALLOW_KEYWORD_MACROS
 
@@ -68,7 +69,7 @@
 #include "../3rdparty/sjson/sjson.h"
 
 #define VERSION_MAJOR  1
-#define VERSION_MINOR  61
+#define VERSION_MINOR  62
 #define VERSION_SUB    0
 
 static const sx_alloc* g_alloc = sx_alloc_malloc();
@@ -1459,6 +1460,10 @@ static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
         std::string def("#extension GL_GOOGLE_include_directive : require\n");
         def += semantics_def;
 
+        if (args.lang == SHADER_LANG_GLES && args.profile_ver == 200) {
+            def += std::string("#define flat\n");
+        }
+
         // Read target file
         sx_mem_block* mem = sx_file_load_bin(g_alloc, files[i].filename);
         if (!mem) {
@@ -1675,7 +1680,7 @@ int main(int argc, char* argv[])
         else if (args.lang == SHADER_LANG_HLSL)
             args.profile_ver = 50;      // D3D11
         else if (args.lang == SHADER_LANG_GLSL)
-            args.profile_ver = 400;     // D3D11 level hardware
+            args.profile_ver = 330;     
     }
 
 #if SX_PLATFORM_WINDOWS 

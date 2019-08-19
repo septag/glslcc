@@ -462,7 +462,9 @@ std::string CompilerGLSL::get_partial_source()
 void CompilerGLSL::emit_header()
 {
 	auto &execution = get_entry_point();
-	statement("#version ", options.version, options.es && options.version > 100 ? " es" : "");
+    if (options.es && options.version > 200) {
+        statement("#version ", options.version, options.es && options.version > 100 ? " es" : "");
+    } 
 
 	if (!options.es && options.version < 420)
 	{
