@@ -22,6 +22,9 @@ struct sgs_stage {
 
     void*       refl;
     uint32_t    refl_size;
+
+    void*       cs_refl;
+    uint32_t    cs_refl_size;
 };
 
 struct sgs_file

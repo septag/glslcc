@@ -4,8 +4,11 @@
 //
 
 //
-// File version: 1.0.0
+// File version: 1.1.0
 // File endianness: little
+// 
+// v1.1.0 CHANGES
+//      - added num_storages_images, num_storage_buffers (CS specific) variables to sgs_chunk_refl
 //
 #pragma once
 
@@ -13,11 +16,11 @@
 
 #pragma pack(push, 1)
 
-#define SGS_CHUNK      sx_makefourcc('S', 'G', 'S', ' ')
-#define SGS_CHUNK_STAG sx_makefourcc('S', 'T', 'A', 'G')
-#define SGS_CHUNK_REFL sx_makefourcc('R', 'E', 'F', 'L')
-#define SGS_CHUNK_CODE sx_makefourcc('C', 'O', 'D', 'E')
-#define SGS_CHUNK_DATA sx_makefourcc('D', 'A', 'T', 'A')
+#define SGS_CHUNK           sx_makefourcc('S', 'G', 'S', ' ')
+#define SGS_CHUNK_STAG      sx_makefourcc('S', 'T', 'A', 'G')
+#define SGS_CHUNK_REFL      sx_makefourcc('R', 'E', 'F', 'L')
+#define SGS_CHUNK_CODE      sx_makefourcc('C', 'O', 'D', 'E')
+#define SGS_CHUNK_DATA      sx_makefourcc('D', 'A', 'T', 'A')
 
 #define SGS_LANG_GLES sx_makefourcc('G', 'L', 'E', 'S')
 #define SGS_LANG_HLSL sx_makefourcc('H', 'L', 'S', 'L')
@@ -58,12 +61,16 @@ struct sgs_chunk_refl {
     uint32_t num_inputs;
     uint32_t num_textures;
     uint32_t num_uniform_buffers;
+    uint32_t num_storage_images;
+    uint32_t num_storage_buffers;
     uint16_t flatten_ubos;
     uint16_t debug_info;
 
     // inputs: sgs_refl_input[num_inputs]
     // uniform-buffers: sgs_refl_uniformbuffer[num_uniform_buffers]
     // textures: sgs_refl_texture[num_textures]
+    // storage_images: sgs_refl_texture[num_storage_images]
+    // storage_buffers: sgs_refl_buffer[num_storage_buffers]
 };
 
 struct sgs_refl_input {
@@ -81,6 +88,13 @@ struct sgs_refl_texture {
     uint8_t  multisample;
     uint8_t  is_array;
 };
+
+struct sgs_refl_buffer {
+    char    name[32];
+    int32_t binding;
+    uint32_t size_bytes;
+    uint32_t array_stride;
+}; 
 
 struct sgs_refl_uniformbuffer {
     char     name[32];
