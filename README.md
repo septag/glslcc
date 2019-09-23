@@ -169,9 +169,11 @@ The blocks are composed of a uint32_t fourcc code + uint32_t variable defining t
 		- `DATA`: binary (byte-code) data for the shader stage
 		- `REFL`: Reflection data for the shader stage
 			- `struct sgs_chunk_refl`: reflection data header
-			- `struct sgs_refl_input[]`: array of vertex-shader input attributes, if exists (see `sgs_chunk_refl` for number of inputs)
-			- `struct sgs_refl_uniform_buffer[]`: array of uniform buffer objects, if exists (see `sgs_chunk_refl` for number of uniform buffers)
-			- `struct sgs_refl_texture[]`: array of texture objects, if exists (see `sgs_chunk_refl` for number of textures)
+			- `struct sgs_refl_input[]`: array of vertex-shader input attributes (see `sgs_chunk_refl` for number of inputs)
+			- `struct sgs_refl_uniform_buffer[]`: array of uniform buffer objects (see `sgs_chunk_refl` for number of uniform buffers)
+			- `struct sgs_refl_texture[]`: array of texture objects (see `sgs_chunk_refl` for number of textures)
+			- `struct sgs_refl_texture[]`: array of storage image objects (see `sgs_chunk_refl` for number of storage images)
+			- `struct sgs_refl_buffer[]`: array of storage buffer objects (see `sgs_chunk_refl` for number of storage buffers)
 
 ### MSVC integration
 
