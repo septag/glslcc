@@ -125,7 +125,6 @@ const TBuiltInResource DefaultTBuiltInResource = {
     /* .MaxCullDistances = */ 8,
     /* .MaxCombinedClipAndCullDistances = */ 8,
     /* .MaxSamples = */ 4,
-#ifdef NV_EXTENSIONS
     /* .maxMeshOutputVerticesNV = */ 256,
     /* .maxMeshOutputPrimitivesNV = */ 512,
     /* .maxMeshWorkGroupSizeX_NV = */ 32,
@@ -135,7 +134,6 @@ const TBuiltInResource DefaultTBuiltInResource = {
     /* .maxTaskWorkGroupSizeY_NV = */ 1,
     /* .maxTaskWorkGroupSizeZ_NV = */ 1,
     /* .maxMeshViewCountNV = */ 4,
-#endif
 
     /* .limits = */ {
         /* .nonInductiveForLoops = */ 1,
@@ -236,7 +234,6 @@ std::string GetDefaultTBuiltInResourceString()
             << "MaxCullDistances "                          << DefaultTBuiltInResource.maxCullDistances << "\n"
             << "MaxCombinedClipAndCullDistances "           << DefaultTBuiltInResource.maxCombinedClipAndCullDistances << "\n"
             << "MaxSamples "                                << DefaultTBuiltInResource.maxSamples << "\n"
-#ifdef NV_EXTENSIONS
             << "MaxMeshOutputVerticesNV "                   << DefaultTBuiltInResource.maxMeshOutputVerticesNV << "\n"
             << "MaxMeshOutputPrimitivesNV "                 << DefaultTBuiltInResource.maxMeshOutputPrimitivesNV << "\n"
             << "MaxMeshWorkGroupSizeX_NV "                  << DefaultTBuiltInResource.maxMeshWorkGroupSizeX_NV << "\n"
@@ -246,7 +243,6 @@ std::string GetDefaultTBuiltInResourceString()
             << "MaxTaskWorkGroupSizeY_NV "                  << DefaultTBuiltInResource.maxTaskWorkGroupSizeY_NV << "\n"
             << "MaxTaskWorkGroupSizeZ_NV "                  << DefaultTBuiltInResource.maxTaskWorkGroupSizeZ_NV << "\n"
             << "MaxMeshViewCountNV "                        << DefaultTBuiltInResource.maxMeshViewCountNV << "\n"
-#endif
             << "nonInductiveForLoops "                      << DefaultTBuiltInResource.limits.nonInductiveForLoops << "\n"
             << "whileLoops "                                << DefaultTBuiltInResource.limits.whileLoops << "\n"
             << "doWhileLoops "                              << DefaultTBuiltInResource.limits.doWhileLoops << "\n"
@@ -453,7 +449,6 @@ void DecodeResourceLimits(TBuiltInResource* resources, char* config)
             resources->maxCombinedClipAndCullDistances = value;
         else if (tokenStr == "MaxSamples")
             resources->maxSamples = value;
-#ifdef NV_EXTENSIONS
         else if (tokenStr == "MaxMeshOutputVerticesNV")
             resources->maxMeshOutputVerticesNV = value;
         else if (tokenStr == "MaxMeshOutputPrimitivesNV")
@@ -472,7 +467,6 @@ void DecodeResourceLimits(TBuiltInResource* resources, char* config)
             resources->maxTaskWorkGroupSizeZ_NV = value;
         else if (tokenStr == "MaxMeshViewCountNV")
             resources->maxMeshViewCountNV = value;
-#endif
         else if (tokenStr == "nonInductiveForLoops")
             resources->limits.nonInductiveForLoops = (value != 0);
         else if (tokenStr == "whileLoops")
@@ -493,6 +487,7 @@ void DecodeResourceLimits(TBuiltInResource* resources, char* config)
             resources->limits.generalConstantMatrixVectorIndexing = (value != 0);
         else
             printf("Warning: unrecognized limit (%s) in configuration file.\n", tokenStr.c_str());
+
     }
 }
 

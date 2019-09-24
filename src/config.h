@@ -4,7 +4,7 @@
 //
 #pragma once
 
-#include "ResourceLimits.h"
+#include "glslang/include/ResourceLimits.h"
 #include <string>
 
 extern const TBuiltInResource k_default_conf;

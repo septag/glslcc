@@ -26,6 +26,7 @@ endif()
 
 set(spirv-compiler-options "")
 set(spirv-compiler-defines "")
+set(spirv-cross-link-flags "")
 
 if(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
   set(spirv-compiler-defines ${spirv-compiler-defines} SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
@@ -70,9 +71,15 @@ endmacro()
 spirv_cross_add_library(spirv-cross-core spirv_cross_core STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/GLSL.std.450.h
     ${CMAKE_CURRENT_SOURCE_DIR}/spirv_common.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross_containers.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross_error_handling.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/spirv.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/spirv_parser.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/spirv_parser.cpp 
+    ${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross_parsed_ir.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross_parsed_ir.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/spirv_cfg.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/spirv_cfg.cpp)
 

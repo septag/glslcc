@@ -7,6 +7,7 @@ else(WIN32)
 endif(WIN32)
 
 set(SOURCES
+    MachineIndependent/glslang.m4
     MachineIndependent/glslang.y
     MachineIndependent/glslang_tab.cpp
     MachineIndependent/attribute.cpp
@@ -70,21 +71,14 @@ set(HEADERS
     MachineIndependent/propagateNoContraction.h
     MachineIndependent/preprocessor/PpContext.h
     MachineIndependent/preprocessor/PpTokens.h)
-
-# This might be useful for making grammar changes:
-#
-# find_package(BISON)
-# add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/MachineIndependent/glslang_tab.cpp ${CMAKE_CURRENT_SOURCE_DIR}/MachineIndependent/glslang_tab.cpp.h
-#                    COMMAND ${BISON_EXECUTABLE} --defines=${CMAKE_CURRENT_SOURCE_DIR}/MachineIndependent/glslang_tab.cpp.h -t ${CMAKE_CURRENT_SOURCE_DIR}/MachineIndependent/glslang.y -o ${CMAKE_CURRENT_SOURCE_DIR}/MachineIndependent/glslang_tab.cpp
-#                    MAIN_DEPENDENCY MachineIndependent/glslang.y
-#                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-# set(BISON_GLSLParser_OUTPUT_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/MachineIndependent/glslang_tab.cpp)
+	
+glslang_pch(SOURCES MachineIndependent/pch.cpp)
 
 add_library(glslang ${LIB_TYPE} ${BISON_GLSLParser_OUTPUT_SOURCE} ${SOURCES} ${HEADERS})
 set_property(TARGET glslang PROPERTY FOLDER glslang)
 set_property(TARGET glslang PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(glslang OGLCompiler OSDependent)
-target_include_directories(glslang PUBLIC .. INTERFACE Public Include )
+target_include_directories(glslang PUBLIC ..)
 
 if(ENABLE_HLSL)
     target_link_libraries(glslang HLSL)

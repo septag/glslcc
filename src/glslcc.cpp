@@ -44,7 +44,7 @@
 #include "SPIRV/SpvTools.h"
 #include "SPIRV/disassemble.h"
 #include "SPIRV/spirv.hpp"
-#include "ShaderLang.h"
+// #include "ShaderLang.h"
 
 #include "spirv_cross.hpp"
 #include "spirv_glsl.hpp"
@@ -665,7 +665,7 @@ const uint32_t k_texture_dim_fourcc[spv::DimSubpassData + 1] = {
 // https://github.com/KhronosGroup/SPIRV-Cross/wiki/Reflection-API-user-guide
 static void output_resource_info_json(sjson_context* jctx, sjson_node* jparent,
     const spirv_cross::Compiler& compiler,
-    const std::vector<spirv_cross::Resource>& ress,
+    const spirv_cross::SmallVector<spirv_cross::Resource>& ress,
     resource_type res_type = RES_TYPE_REGULAR,
     bool flatten_ubos = false)
 {
@@ -858,7 +858,7 @@ static void output_reflection_json(const cmd_args& args, const spirv_cross::Comp
 
 static void output_resource_info_bin(sx_mem_writer* w, uint32_t* num_values,
     const spirv_cross::Compiler& compiler,
-    const std::vector<spirv_cross::Resource>& ress,
+    const spirv_cross::SmallVector<spirv_cross::Resource>& ress,
     resource_type res_type = RES_TYPE_REGULAR,
     bool flatten_ubos = false)
 {
@@ -1177,13 +1177,15 @@ static int cross_compile(const cmd_args& args, std::vector<uint32_t>& spirv,
         std::string code;
         // Prepare vertex attribute remap for HLSL
         if (args.lang == SHADER_LANG_HLSL) {
-            std::vector<spirv_cross::HLSLVertexAttributeRemap> remaps;
+            // std::vector<spirv_cross::HLSLVertexAttributeRemap> remaps;
+            spirv_cross::CompilerHLSL* hlsl_compiler = (spirv_cross::CompilerHLSL*)compiler.get();
             for (int i = 0; i < VERTEX_ATTRIB_COUNT; i++) {
                 spirv_cross::HLSLVertexAttributeRemap remap = { (uint32_t)i, k_attrib_names[i] };
-                remaps.push_back(std::move(remap));
+                // remaps.push_back(std::move(remap));
+                hlsl_compiler->add_vertex_attribute_remap(remap);
             }
 
-            code = ((spirv_cross::CompilerHLSL*)compiler.get())->compile(std::move(remaps));
+            code = hlsl_compiler->compile();
         } else {
             code = compiler->compile();
         }
