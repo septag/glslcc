@@ -25,6 +25,7 @@
 //      1.61.0      gcc output error format
 //      1.62.0      removed "#version 200 es" inclusion from spirv_glsl.cpp, 330 default for GLSL
 //      1.63.0      added relfection data to compute shader for SGS files
+//      1.7.0       spirv-cross / glslang update
 //
 #define _ALLOW_KEYWORD_MACROS
 
@@ -44,7 +45,6 @@
 #include "SPIRV/SpvTools.h"
 #include "SPIRV/disassemble.h"
 #include "SPIRV/spirv.hpp"
-// #include "ShaderLang.h"
 
 #include "spirv_cross.hpp"
 #include "spirv_glsl.hpp"
@@ -70,7 +70,7 @@
 #include "../3rdparty/sjson/sjson.h"
 
 #define VERSION_MAJOR 1
-#define VERSION_MINOR 63
+#define VERSION_MINOR 7
 #define VERSION_SUB 0
 
 static const sx_alloc* g_alloc = sx_alloc_malloc();
@@ -692,7 +692,7 @@ static void output_resource_info_json(sjson_context* jctx, sjson_node* jparent,
         bool is_push_constant = compiler.get_storage_class(res.id) == spv::StorageClassPushConstant;
         bool is_block = compiler.get_decoration_bitset(type.self).get(spv::DecorationBlock) || compiler.get_decoration_bitset(type.self).get(spv::DecorationBufferBlock);
         bool is_sized_block = is_block && (compiler.get_storage_class(res.id) == spv::StorageClassUniform || compiler.get_storage_class(res.id) == spv::StorageClassUniformConstant);
-        uint32_t fallback_id = !is_push_constant && is_block ? res.base_type_id : res.id;
+        uint32_t fallback_id = !is_push_constant && is_block ? (uint32_t)res.base_type_id : (uint32_t)res.id;
 
         uint32_t block_size = 0;
         uint32_t runtime_array_stride = 0;
@@ -883,7 +883,7 @@ static void output_resource_info_bin(sx_mem_writer* w, uint32_t* num_values,
         bool is_push_constant = compiler.get_storage_class(res.id) == spv::StorageClassPushConstant;
         bool is_block = compiler.get_decoration_bitset(type.self).get(spv::DecorationBlock) || compiler.get_decoration_bitset(type.self).get(spv::DecorationBufferBlock);
         bool is_sized_block = is_block && (compiler.get_storage_class(res.id) == spv::StorageClassUniform || compiler.get_storage_class(res.id) == spv::StorageClassUniformConstant);
-        uint32_t fallback_id = !is_push_constant && is_block ? res.base_type_id : res.id;
+        uint32_t fallback_id = !is_push_constant && is_block ? (uint32_t)res.base_type_id : (uint32_t)res.id;
 
         uint32_t block_size = 0;
         uint32_t runtime_array_stride = 0;
