@@ -607,8 +607,10 @@ void CompilerGLSL::emit_header()
 	auto &execution = get_entry_point();
 
     if (options.es && options.version > 200) {
-	    statement("#version ", options.version, options.es && options.version > 100 ? " es" : "");
-    }
+	    statement("#version ", options.version, " es");
+    } else if (!options.es) {
+		statement("#version ", options.version);
+	}
 
 	if (!options.es && options.version < 420)
 	{

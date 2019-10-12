@@ -26,6 +26,7 @@
 //      1.62.0      removed "#version 200 es" inclusion from spirv_glsl.cpp, 330 default for GLSL
 //      1.63.0      added relfection data to compute shader for SGS files
 //      1.7.0       spirv-cross / glslang update
+//      1.7.1       bug fixed in spirv_glsl::emit_header for OpenGL 3+ GLSL shaders
 //
 #define _ALLOW_KEYWORD_MACROS
 
