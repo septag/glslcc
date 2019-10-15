@@ -27,6 +27,7 @@
 //      1.63.0      added relfection data to compute shader for SGS files
 //      1.7.0       spirv-cross / glslang update
 //      1.7.1       bug fixed in spirv_glsl::emit_header for OpenGL 3+ GLSL shaders
+//      1.7.2       bugs fixed in parsing --defines and --include-dirs flags
 //
 #define _ALLOW_KEYWORD_MACROS
 
@@ -72,7 +73,7 @@
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 7
-#define VERSION_SUB 1
+#define VERSION_SUB 2
 
 static const sx_alloc* g_alloc = sx_alloc_malloc();
 static sgs_file* g_sgs = nullptr;
@@ -281,6 +282,7 @@ struct cmd_args {
     int reflect;
     int compile_bin;
     int debug_bin;
+    int optimize;
     int silent;
     int validate;
     output_error_format err_format;
@@ -344,12 +346,7 @@ static void parse_defines(cmd_args* args, const char* defines)
             const char* next_def = sx_strchar(def, ',');
             if (!next_def)
                 next_def = sx_strchar(def, ';');
-            int len;
-            if (next_def) {
-                len = (int)(uintptr_t)(next_def - def);
-            } else {
-                len = sx_strlen(def);
-            }
+            int len = next_def ? (int)(uintptr_t)(next_def - def) : sx_strlen(def);
 
             if (len > 0) {
                 p_define d = { 0x0 };
@@ -358,9 +355,7 @@ static void parse_defines(cmd_args* args, const char* defines)
                 sx_trim_whitespace(d.def, len + 1, d.def);
 
                 // Check def=value pair
-                char* equal = (char*)sx_strchar(d.def, ':');
-                if (!equal)
-                    equal = (char*)sx_strchar(d.def, '=');
+                char* equal = (char*)sx_strchar(d.def, '=');
                 if (equal) {
                     *equal = 0;
                     d.val = equal + 1;
@@ -369,9 +364,10 @@ static void parse_defines(cmd_args* args, const char* defines)
                 sx_array_push(g_alloc, args->defines, d);
             }
 
-            def = sx_strchar(def, ',');
-            if (def)
+            def = next_def;
+            if (def) {
                 def++;
+            }
         }
     } while (def);
 }
@@ -466,25 +462,20 @@ static void parse_includes(cmd_args* args, const char* includes)
         inc = sx_skip_whitespace(inc);
         if (inc[0]) {
             const char* next_inc = sx_strchar(inc, ';');
-            int len;
-            if (next_inc) {
-                len = (int)(uintptr_t)(next_inc - inc);
-            } else {
-                len = sx_strlen(inc);
-            }
+            int len = next_inc ? (int)(uintptr_t)(next_inc - inc) : sx_strlen(inc);
 
             if (len > 0) {
                 char* inc_str = (char*)sx_malloc(g_alloc, len + 1);
                 sx_assert(inc_str);
                 sx_strncpy(inc_str, len + 1, inc, len);
-                sx_trim_whitespace(inc_str, len + 1, inc_str);
                 args->includer.addSystemDir(inc_str);
                 sx_free(g_alloc, inc_str);
             }
 
-            inc = sx_strchar(inc, ',');
-            if (inc)
+            inc = next_inc;
+            if (inc) {
                 inc++;
+            }
         }
     } while (inc);
 }
@@ -1608,7 +1599,8 @@ int main(int argc, char* argv[])
         { "reflect", 'r', SX_CMDLINE_OPTYPE_OPTIONAL, 0x0, 'r', "Output shader reflection information to a json file", "Filepath" },
         { "sgs", 'G', SX_CMDLINE_OPTYPE_FLAG_SET, &args.sgs_file, 1, "Output file should be packed SGS format", "Filepath" },
         { "bin", 'b', SX_CMDLINE_OPTYPE_FLAG_SET, &args.compile_bin, 1, "Compile to bytecode instead of source. requires ENABLE_D3D11_COMPILER build flag", 0x0 },
-        { "debug-bin", 'g', SX_CMDLINE_OPTYPE_FLAG_SET, &args.debug_bin, 1, "Generate debug info for binary compilation, should come with --bin", 0x0 },
+        { "debug", 'g', SX_CMDLINE_OPTYPE_FLAG_SET, &args.debug_bin, 1, "Generate debug info for binary compilation, should come with --bin", 0x0 },
+        { "optimize", 'O', SX_CMDLINE_OPTYPE_FLAG_SET, &args.optimize, 1, "Optimize shader for release compilation", 0x0 },
         { "silent", 'S', SX_CMDLINE_OPTYPE_FLAG_SET, &args.silent, 1, "Does not output filename(s) after compile success" },
         { "input", 'i', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'i', "Input shader source file. determined by extension (.vert/.frag/.comp)", 0x0 },
         { "validate", '0', SX_CMDLINE_OPTYPE_FLAG_SET, &args.validate, 1, "Only performs shader validatation and error checking", 0x0 },
