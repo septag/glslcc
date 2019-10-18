@@ -5,7 +5,7 @@ set(SOURCE_FILES "glslcc.cpp"
                  "config.cpp" 
                  "sgs-file.h" 
                  "sgs-file.cpp")
-
+				 
 add_executable(glslcc ${SOURCE_FILES})
 
 target_link_libraries(glslcc PRIVATE 
@@ -24,15 +24,35 @@ target_link_libraries(glslcc PRIVATE
         spirv-cross-msl)  
 
 if (MSVC)
-        if (ENABLE_D3D11_COMPILER)
-                add_definitions(-DD3D11_COMPILER)    
-                target_link_libraries(glslcc PRIVATE d3dcompiler)    
-        endif()
-elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-        target_link_libraries(glslcc PRIVATE -static-libgcc -static-libstdc++)
+	if (ENABLE_D3D11_COMPILER)
+			add_definitions(-DD3D11_COMPILER)    
+			target_link_libraries(glslcc PRIVATE d3dcompiler)    
+	endif()
+elseif (NOT WIN32)
+	
 endif()
 
+# static linking
+if (STATIC_LINK)
+	if (MSVC)
+		remove_compile_options(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}" "/MD")
+		remove_compile_options(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}" "/MD")
+		set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
+		set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
+	else()
+		if (CMAKE_BUILD_TYPE STREQUAL Release)
+			set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++ -static")
+			if (APPLE)
+				add_custom_command(TARGET glslcc POST_BUILD COMMAND strip -X -x ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/glslcc)
+			elseif (NOT WIN32)
+				add_custom_command(TARGET glslcc POST_BUILD COMMAND strip -g -X -x ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/glslcc)
+			endif()
+		endif()
+	endif()
+endif()	
 
 install(TARGETS glslcc 
         CONFIGURATIONS Release
         RUNTIME DESTINATION bin)
+		
+		
