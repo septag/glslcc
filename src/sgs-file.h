@@ -26,7 +26,6 @@
 #define SGS_LANG_HLSL sx_makefourcc('H', 'L', 'S', 'L')
 #define SGS_LANG_GLSL sx_makefourcc('G', 'L', 'S', 'L')
 #define SGS_LANG_MSL  sx_makefourcc('M', 'S', 'L', ' ')
-#define SGS_LANG_GLES sx_makefourcc('G', 'L', 'E', 'S')
 
 #define SGS_VERTEXFORMAT_FLOAT      sx_makefourcc('F', 'L', 'T', '1')
 #define SGS_VERTEXFORMAT_FLOAT2     sx_makefourcc('F', 'L', 'T', '2')
