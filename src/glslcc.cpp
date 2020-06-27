@@ -28,6 +28,7 @@
 //      1.7.0       spirv-cross / glslang update
 //      1.7.1       bug fixed in spirv_glsl::emit_header for OpenGL 3+ GLSL shaders
 //      1.7.2       bugs fixed in parsing --defines and --include-dirs flags
+//      1.7.3       Added current file directory to the include-dirs
 //
 #define _ALLOW_KEYWORD_MACROS
 
@@ -73,7 +74,7 @@
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 7
-#define VERSION_SUB 2
+#define VERSION_SUB 3
 
 static const sx_alloc* g_alloc = sx_alloc_malloc();
 static sgs_file* g_sgs = nullptr;
@@ -260,6 +261,13 @@ public:
         std::string std_dir(dir);
         std::replace(std_dir.begin(), std_dir.end(), '\\', '/');
         m_systemDirs.push_back(std_dir);
+    }
+
+    void addIncluder(const Includer& includer)
+    {
+        for (const std::string& inc : includer.m_systemDirs) {
+            m_systemDirs.push_back(inc);
+        }
     }
 
 private:
@@ -1490,10 +1498,15 @@ static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
         shader->setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_0);
         add_defines(shader, args, def);
 
+        std::string prep_str;
+        Includer includer;
+        char cur_file_dir[MAX_PATH];
+        sx_os_path_dirname(cur_file_dir, sizeof(cur_file_dir), files[i].filename);
+        includer.addSystemDir(cur_file_dir);
+        includer.addIncluder(args.includer);
+
         if (args.preprocess) {
-            std::string prep_str;
-            if (shader->preprocess(&limits_conf, default_version, ENoProfile, false, false, messages, &prep_str,
-                    args.includer)) {
+            if (shader->preprocess(&limits_conf, default_version, ENoProfile, false, false, messages, &prep_str, includer)) {
                 puts("-------------------");
                 printf("%s:\n", files[i].filename);
                 puts("-------------------");
@@ -1505,7 +1518,7 @@ static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
                 compile_files_ret(-1);
             }
         } else {
-            if (!shader->parse(&limits_conf, default_version, false, messages, args.includer)) {
+            if (!shader->parse(&limits_conf, default_version, false, messages, includer)) {
                 output_error(shader->getInfoLog(), args, files[i].filename);
                 sx_mem_destroy_block(mem);
                 compile_files_ret(-1);
@@ -1608,6 +1621,8 @@ int main(int argc, char* argv[])
         SX_CMDLINE_OPT_END
     };
     sx_cmdline_context* cmdline = sx_cmdline_create_context(g_alloc, argc, (const char**)argv, opts);
+
+    // always include the 
 
     int opt;
     const char* arg;

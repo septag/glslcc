@@ -75,7 +75,7 @@ layout (location = POSITION) in vec3 aPos;
 layout (location = COLOR0) in vec4 aColor;
 layout (location = TEXCOORD0) in vec2 aCoord;
 
-layout (std140) uniform matrices
+layout (std140, binding=0) uniform matrices
 {
     mat4 projection;
     mat4 view;
