@@ -29,6 +29,7 @@
 //      1.7.1       bug fixed in spirv_glsl::emit_header for OpenGL 3+ GLSL shaders
 //      1.7.2       bugs fixed in parsing --defines and --include-dirs flags
 //      1.7.3       Added current file directory to the include-dirs
+//      1.7.4       Fix compilation error on non-Windows platforms
 //
 #define _ALLOW_KEYWORD_MACROS
 
@@ -62,6 +63,14 @@
 #define BYTECODE_COMPILATION
 #endif
 
+#if SX_PLATFORM_WINDOWS
+#define PATH_MAX MAX_PATH
+#elif SX_PLATFORM_LINUX || SX_PLATFORM_RPI || SX_PLATFORM_STEAMLINK
+#include <linux/limits.h>
+#elif SX_PLATFORM_BSD || SX_PLATFORM_APPLE
+#include <sys/syslimits.h>
+#endif
+
 // sjson
 #define sjson_malloc(user, size) sx_malloc((const sx_alloc*)user, size)
 #define sjson_free(user, ptr) sx_free((const sx_alloc*)user, ptr)
@@ -74,7 +83,7 @@
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 7
-#define VERSION_SUB 3
+#define VERSION_SUB 4
 
 static const sx_alloc* g_alloc = sx_alloc_malloc();
 static sgs_file* g_sgs = nullptr;
@@ -1500,7 +1509,7 @@ static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
 
         std::string prep_str;
         Includer includer;
-        char cur_file_dir[MAX_PATH];
+        char cur_file_dir[PATH_MAX];
         sx_os_path_dirname(cur_file_dir, sizeof(cur_file_dir), files[i].filename);
         includer.addSystemDir(cur_file_dir);
         includer.addIncluder(args.includer);
