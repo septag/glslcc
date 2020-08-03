@@ -1500,7 +1500,7 @@ static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
 
         std::string prep_str;
         Includer includer;
-        char cur_file_dir[MAX_PATH];
+        char cur_file_dir[512];
         sx_os_path_dirname(cur_file_dir, sizeof(cur_file_dir), files[i].filename);
         includer.addSystemDir(cur_file_dir);
         includer.addIncluder(args.includer);
