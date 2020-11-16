@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2019 Arm Limited
+ * Copyright 2015-2020 Arm Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -273,11 +273,27 @@ SPIRVariable *Compiler::maybe_get_backing_variable(uint32_t chain)
 	return var;
 }
 
-StorageClass Compiler::get_backing_variable_storage(uint32_t ptr)
+StorageClass Compiler::get_expression_effective_storage_class(uint32_t ptr)
 {
 	auto *var = maybe_get_backing_variable(ptr);
-	if (var)
-		return var->storage;
+
+	// If the expression has been lowered to a temporary, we need to use the Generic storage class.
+	// We're looking for the effective storage class of a given expression.
+	// An access chain or forwarded OpLoads from such access chains
+	// will generally have the storage class of the underlying variable, but if the load was not forwarded
+	// we have lost any address space qualifiers.
+	bool forced_temporary = ir.ids[ptr].get_type() == TypeExpression && !get<SPIRExpression>(ptr).access_chain &&
+	                        (forced_temporaries.count(ptr) != 0 || forwarded_temporaries.count(ptr) == 0);
+
+	if (var && !forced_temporary)
+	{
+		// Normalize SSBOs to StorageBuffer here.
+		if (var->storage == StorageClassUniform &&
+		    has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock))
+			return StorageClassStorageBuffer;
+		else
+			return var->storage;
+	}
 	else
 		return expression_type(ptr).storage;
 }
@@ -316,6 +332,8 @@ void Compiler::register_write(uint32_t chain)
 		if (access_chain && access_chain->loaded_from)
 			var = maybe_get<SPIRVariable>(access_chain->loaded_from);
 	}
+
+	auto &chain_type = expression_type(chain);
 
 	if (var)
 	{
@@ -359,7 +377,7 @@ void Compiler::register_write(uint32_t chain)
 			force_recompile();
 		}
 	}
-	else
+	else if (chain_type.pointer)
 	{
 		// If we stored through a variable pointer, then we don't know which
 		// variable we stored to. So *all* expressions after this point need to
@@ -368,6 +386,9 @@ void Compiler::register_write(uint32_t chain)
 		// only certain variables, we can invalidate only those.
 		flush_all_active_variables();
 	}
+
+	// If chain_type.pointer is false, we're not writing to memory backed variables, but temporaries instead.
+	// This can happen in copy_logical_type where we unroll complex reads and writes to temporaries.
 }
 
 void Compiler::flush_dependees(SPIRVariable &var)
@@ -866,7 +887,7 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<VariableID> *
 			res.atomic_counters.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
 		}
 		// Acceleration structures
-		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::AccelerationStructureNV)
+		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::AccelerationStructure)
 		{
 			res.acceleration_structures.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
 		}
@@ -1631,6 +1652,148 @@ size_t Compiler::get_declared_struct_size_runtime_array(const SPIRType &type, si
 	return size;
 }
 
+uint32_t Compiler::evaluate_spec_constant_u32(const SPIRConstantOp &spec) const
+{
+	auto &result_type = get<SPIRType>(spec.basetype);
+	if (result_type.basetype != SPIRType::UInt && result_type.basetype != SPIRType::Int && result_type.basetype != SPIRType::Boolean)
+		SPIRV_CROSS_THROW("Only 32-bit integers and booleans are currently supported when evaluating specialization constants.\n");
+	if (!is_scalar(result_type))
+		SPIRV_CROSS_THROW("Spec constant evaluation must be a scalar.\n");
+
+	uint32_t value = 0;
+
+	const auto eval_u32 = [&](uint32_t id) -> uint32_t {
+		auto &type = expression_type(id);
+		if (type.basetype != SPIRType::UInt && type.basetype != SPIRType::Int && type.basetype != SPIRType::Boolean)
+			SPIRV_CROSS_THROW("Only 32-bit integers and booleans are currently supported when evaluating specialization constants.\n");
+		if (!is_scalar(type))
+			SPIRV_CROSS_THROW("Spec constant evaluation must be a scalar.\n");
+		if (const auto *c = this->maybe_get<SPIRConstant>(id))
+			return c->scalar();
+		else
+			return evaluate_spec_constant_u32(this->get<SPIRConstantOp>(id));
+	};
+
+#define binary_spec_op(op, binary_op) \
+	case Op##op: value = eval_u32(spec.arguments[0]) binary_op eval_u32(spec.arguments[1]); break
+#define binary_spec_op_cast(op, binary_op, type) \
+	case Op##op: value = uint32_t(type(eval_u32(spec.arguments[0])) binary_op type(eval_u32(spec.arguments[1]))); break
+
+	// Support the basic opcodes which are typically used when computing array sizes.
+	switch (spec.opcode)
+	{
+	binary_spec_op(IAdd, +);
+	binary_spec_op(ISub, -);
+	binary_spec_op(IMul, *);
+	binary_spec_op(BitwiseAnd, &);
+	binary_spec_op(BitwiseOr, |);
+	binary_spec_op(BitwiseXor, ^);
+	binary_spec_op(LogicalAnd, &);
+	binary_spec_op(LogicalOr, |);
+	binary_spec_op(ShiftLeftLogical, <<);
+	binary_spec_op(ShiftRightLogical, >>);
+	binary_spec_op_cast(ShiftRightArithmetic, >>, int32_t);
+	binary_spec_op(LogicalEqual, ==);
+	binary_spec_op(LogicalNotEqual, !=);
+	binary_spec_op(IEqual, ==);
+	binary_spec_op(INotEqual, !=);
+	binary_spec_op(ULessThan, <);
+	binary_spec_op(ULessThanEqual, <=);
+	binary_spec_op(UGreaterThan, >);
+	binary_spec_op(UGreaterThanEqual, >=);
+	binary_spec_op_cast(SLessThan, <, int32_t);
+	binary_spec_op_cast(SLessThanEqual, <=, int32_t);
+	binary_spec_op_cast(SGreaterThan, >, int32_t);
+	binary_spec_op_cast(SGreaterThanEqual, >=, int32_t);
+#undef binary_spec_op
+#undef binary_spec_op_cast
+
+	case OpLogicalNot:
+		value = uint32_t(!eval_u32(spec.arguments[0]));
+		break;
+
+	case OpNot:
+		value = ~eval_u32(spec.arguments[0]);
+		break;
+
+	case OpSNegate:
+		value = -eval_u32(spec.arguments[0]);
+		break;
+
+	case OpSelect:
+		value = eval_u32(spec.arguments[0]) ? eval_u32(spec.arguments[1]) : eval_u32(spec.arguments[2]);
+		break;
+
+	case OpUMod:
+	{
+		uint32_t a = eval_u32(spec.arguments[0]);
+		uint32_t b = eval_u32(spec.arguments[1]);
+		if (b == 0)
+			SPIRV_CROSS_THROW("Undefined behavior in UMod, b == 0.\n");
+		value = a % b;
+		break;
+	}
+
+	case OpSRem:
+	{
+		auto a = int32_t(eval_u32(spec.arguments[0]));
+		auto b = int32_t(eval_u32(spec.arguments[1]));
+		if (b == 0)
+			SPIRV_CROSS_THROW("Undefined behavior in SRem, b == 0.\n");
+		value = a % b;
+		break;
+	}
+
+	case OpSMod:
+	{
+		auto a = int32_t(eval_u32(spec.arguments[0]));
+		auto b = int32_t(eval_u32(spec.arguments[1]));
+		if (b == 0)
+			SPIRV_CROSS_THROW("Undefined behavior in SMod, b == 0.\n");
+		auto v = a % b;
+
+		// Makes sure we match the sign of b, not a.
+		if ((b < 0 && v > 0) || (b > 0 && v < 0))
+			v += b;
+		value = v;
+		break;
+	}
+
+	case OpUDiv:
+	{
+		uint32_t a = eval_u32(spec.arguments[0]);
+		uint32_t b = eval_u32(spec.arguments[1]);
+		if (b == 0)
+			SPIRV_CROSS_THROW("Undefined behavior in UDiv, b == 0.\n");
+		value = a / b;
+		break;
+	}
+
+	case OpSDiv:
+	{
+		auto a = int32_t(eval_u32(spec.arguments[0]));
+		auto b = int32_t(eval_u32(spec.arguments[1]));
+		if (b == 0)
+			SPIRV_CROSS_THROW("Undefined behavior in SDiv, b == 0.\n");
+		value = a / b;
+		break;
+	}
+
+	default:
+		SPIRV_CROSS_THROW("Unsupported spec constant opcode for evaluation.\n");
+	}
+
+	return value;
+}
+
+uint32_t Compiler::evaluate_constant_u32(uint32_t id) const
+{
+	if (const auto *c = maybe_get<SPIRConstant>(id))
+		return c->scalar();
+	else
+		return evaluate_spec_constant_u32(get<SPIRConstantOp>(id));
+}
+
 size_t Compiler::get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const
 {
 	if (struct_type.member_types.empty())
@@ -1654,11 +1817,18 @@ size_t Compiler::get_declared_struct_member_size(const SPIRType &struct_type, ui
 		break;
 	}
 
+	if (type.pointer && type.storage == StorageClassPhysicalStorageBuffer)
+	{
+		// Check if this is a top-level pointer type, and not an array of pointers.
+		if (type.pointer_depth > get<SPIRType>(type.parent_type).pointer_depth)
+			return 8;
+	}
+
 	if (!type.array.empty())
 	{
 		// For arrays, we can use ArrayStride to get an easy check.
 		bool array_size_literal = type.array_size_literal.back();
-		uint32_t array_size = array_size_literal ? type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
+		uint32_t array_size = array_size_literal ? type.array.back() : evaluate_constant_u32(type.array.back());
 		return type_struct_member_array_stride(struct_type, index) * array_size;
 	}
 	else if (type.basetype == SPIRType::Struct)
@@ -2729,6 +2899,12 @@ void Compiler::AnalyzeVariableScopeAccessHandler::notify_variable_access(uint32_
 	if (id == 0)
 		return;
 
+	// Access chains used in multiple blocks mean hoisting all the variables used to construct the access chain as not all backends can use pointers.
+	auto itr = access_chain_children.find(id);
+	if (itr != end(access_chain_children))
+		for (auto child_id : itr->second)
+			notify_variable_access(child_id, block);
+
 	if (id_is_phi_variable(id))
 		accessed_variables_to_block[id].insert(block);
 	else if (id_is_potential_temporary(id))
@@ -2793,14 +2969,21 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 		if (length < 3)
 			return false;
 
+		// Access chains used in multiple blocks mean hoisting all the variables used to construct the access chain as not all backends can use pointers.
 		uint32_t ptr = args[2];
 		auto *var = compiler.maybe_get<SPIRVariable>(ptr);
 		if (var)
+		{
 			accessed_variables_to_block[var->self].insert(current_block->self);
+			access_chain_children[args[1]].insert(var->self);
+		}
 
 		// args[2] might be another access chain we have to track use of.
 		for (uint32_t i = 2; i < length; i++)
+		{
 			notify_variable_access(args[i], current_block->self);
+			access_chain_children[args[1]].insert(args[i]);
+		}
 
 		// Also keep track of the access chain pointer itself.
 		// In exceptionally rare cases, we can end up with a case where
@@ -2889,6 +3072,10 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 		if (length < 3)
 			return false;
 
+		// Return value may be a temporary.
+		if (compiler.get_type(args[0]).basetype != SPIRType::Void)
+			notify_variable_access(args[1], current_block->self);
+
 		length -= 3;
 		args += 3;
 
@@ -2909,9 +3096,6 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 			// Might try to copy a Phi variable here.
 			notify_variable_access(args[i], current_block->self);
 		}
-
-		// Return value may be a temporary.
-		notify_variable_access(args[1], current_block->self);
 		break;
 	}
 
@@ -3290,6 +3474,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 
 		DominatorBuilder builder(cfg);
 		bool force_temporary = false;
+		bool used_in_header_hoisted_continue_block = false;
 
 		// Figure out which block is dominating all accesses of those temporaries.
 		auto &blocks = var.second;
@@ -3304,10 +3489,8 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 				// This is moot for complex loops however.
 				auto &loop_header_block = get<SPIRBlock>(ir.continue_block_to_loop_header[block]);
 				assert(loop_header_block.merge == SPIRBlock::MergeLoop);
-
-				// Only relevant if the loop is not marked as complex.
-				if (!loop_header_block.complex_continue)
-					builder.add_block(loop_header_block.self);
+				builder.add_block(loop_header_block.self);
+				used_in_header_hoisted_continue_block = true;
 			}
 		}
 
@@ -3332,11 +3515,22 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 				{
 					// Exceptionally rare case.
 					// We cannot declare temporaries of access chains (except on MSL perhaps with pointers).
-					// Rather than do that, we force a complex loop to make sure access chains are created and consumed
-					// in expected order.
-					auto &loop_header_block = get<SPIRBlock>(dominating_block);
-					assert(loop_header_block.merge == SPIRBlock::MergeLoop);
-					loop_header_block.complex_continue = true;
+					// Rather than do that, we force the indexing expressions to be declared in the right scope by
+					// tracking their usage to that end. There is no temporary to hoist.
+					// However, we still need to observe declaration order of the access chain.
+
+					if (used_in_header_hoisted_continue_block)
+					{
+						// For this scenario, we used an access chain inside a continue block where we also registered an access to header block.
+						// This is a problem as we need to declare an access chain properly first with full definition.
+						// We cannot use temporaries for these expressions,
+						// so we must make sure the access chain is declared ahead of time.
+						// Force a complex for loop to deal with this.
+						// TODO: Out-of-order declaring for loops where continue blocks are emitted last might be another option.
+						auto &loop_header_block = get<SPIRBlock>(dominating_block);
+						assert(loop_header_block.merge == SPIRBlock::MergeLoop);
+						loop_header_block.complex_continue = true;
+					}
 				}
 				else
 				{
@@ -3773,6 +3967,13 @@ void Compiler::analyze_image_and_sampler_usage()
 
 	CombinedImageSamplerUsageHandler handler(*this, dref_handler.dref_combined_samplers);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
+
+	// Need to run this traversal twice. First time, we propagate any comparison sampler usage from leaf functions
+	// down to main().
+	// In the second pass, we can propagate up forced depth state coming from main() up into leaf functions.
+	handler.dependency_hierarchy.clear();
+	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
+
 	comparison_ids = move(handler.comparison_ids);
 	need_subpass_input = handler.need_subpass_input;
 
@@ -3888,6 +4089,14 @@ bool Compiler::CFGBuilder::follow_function_call(const SPIRFunction &func)
 		return false;
 }
 
+void Compiler::CombinedImageSamplerUsageHandler::add_dependency(uint32_t dst, uint32_t src)
+{
+	dependency_hierarchy[dst].insert(src);
+	// Propagate up any comparison state if we're loading from one such variable.
+	if (comparison_ids.count(src))
+		comparison_ids.insert(dst);
+}
+
 bool Compiler::CombinedImageSamplerUsageHandler::begin_function_scope(const uint32_t *args, uint32_t length)
 {
 	if (length < 3)
@@ -3900,7 +4109,7 @@ bool Compiler::CombinedImageSamplerUsageHandler::begin_function_scope(const uint
 	for (uint32_t i = 0; i < length; i++)
 	{
 		auto &argument = func.arguments[i];
-		dependency_hierarchy[argument.id].insert(arg[i]);
+		add_dependency(argument.id, arg[i]);
 	}
 
 	return true;
@@ -3910,6 +4119,7 @@ void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_ids
 {
 	// Traverse the variable dependency hierarchy and tag everything in its path with comparison ids.
 	comparison_ids.insert(id);
+
 	for (auto &dep_id : dependency_hierarchy[id])
 		add_hierarchy_to_comparison_ids(dep_id);
 }
@@ -3925,7 +4135,8 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 	{
 		if (length < 3)
 			return false;
-		dependency_hierarchy[args[1]].insert(args[2]);
+
+		add_dependency(args[1], args[2]);
 
 		// Ideally defer this to OpImageRead, but then we'd need to track loaded IDs.
 		// If we load an image, we're going to use it and there is little harm in declaring an unused gl_FragCoord.
@@ -3947,14 +4158,17 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 		uint32_t result_type = args[0];
 		uint32_t result_id = args[1];
 		auto &type = compiler.get<SPIRType>(result_type);
+
+		// If the underlying resource has been used for comparison then duplicate loads of that resource must be too.
+		// This image must be a depth image.
+		uint32_t image = args[2];
+		uint32_t sampler = args[3];
+
 		if (type.image.depth || dref_combined_samplers.count(result_id) != 0)
 		{
-			// This image must be a depth image.
-			uint32_t image = args[2];
 			add_hierarchy_to_comparison_ids(image);
 
 			// This sampler must be a SamplerComparisonState, and not a regular SamplerState.
-			uint32_t sampler = args[3];
 			add_hierarchy_to_comparison_ids(sampler);
 
 			// Mark the OpSampledImage itself as being comparison state.
@@ -4155,19 +4369,22 @@ Bitset Compiler::combined_decoration_for_member(const SPIRType &type, uint32_t i
 
 	if (type_meta)
 	{
-		auto &memb = type_meta->members;
-		if (index >= memb.size())
+		auto &members = type_meta->members;
+		if (index >= members.size())
 			return flags;
-		auto &dec = memb[index];
+		auto &dec = members[index];
 
-		// If our type is a struct, traverse all the members as well recursively.
 		flags.merge_or(dec.decoration_flags);
 
-		for (uint32_t i = 0; i < type.member_types.size(); i++)
+		auto &member_type = get<SPIRType>(type.member_types[index]);
+
+		// If our member type is a struct, traverse all the child members as well recursively.
+		auto &member_childs = member_type.member_types;
+		for (uint32_t i = 0; i < member_childs.size(); i++)
 		{
-			auto &memb_type = get<SPIRType>(type.member_types[i]);
-			if (!memb_type.pointer)
-				flags.merge_or(combined_decoration_for_member(memb_type, i));
+			auto &child_member_type = get<SPIRType>(member_childs[i]);
+			if (!child_member_type.pointer)
+				flags.merge_or(combined_decoration_for_member(member_type, i));
 		}
 	}
 
@@ -4585,6 +4802,12 @@ bool Compiler::type_is_array_of_pointers(const SPIRType &type) const
 	return type.pointer_depth == get<SPIRType>(type.parent_type).pointer_depth;
 }
 
+bool Compiler::type_is_top_level_physical_pointer(const SPIRType &type) const
+{
+	return type.pointer && type.storage == StorageClassPhysicalStorageBuffer &&
+	       type.pointer_depth > get<SPIRType>(type.parent_type).pointer_depth;
+}
+
 bool Compiler::flush_phi_required(BlockID from, BlockID to) const
 {
 	auto &child = get<SPIRBlock>(to);
@@ -4592,4 +4815,9 @@ bool Compiler::flush_phi_required(BlockID from, BlockID to) const
 		if (phi.parent == from)
 			return true;
 	return false;
+}
+
+void Compiler::add_loop_level()
+{
+	current_loop_level++;
 }
