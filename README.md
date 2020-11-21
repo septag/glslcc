@@ -25,7 +25,104 @@ _glslcc_ uses CMake. built and tested on:
 - Windows 10 - Microsoft visual studio 2015 Update 3
 - Ubuntu 16.04 - GCC 5.4.0
 - MacOS - 10.14 sdk with clang-1000.11.45.2
-  
+
+#### How to build on Windows
+**Note:** These instructions assume you already have [Git](https://git-scm.com/download/win)
+and [CMake](https://cmake.org/download/) installed.
+
+**I assume that terminal users are using a Linux-style terminal for Windows;**
+**therefore '/' is used in file paths. If you're running Windows cmd all**
+**'/' need to replaced with '\\'**
+
+1. Get the code
+
+```
+git clone https://github.com/septag/glslcc.git
+```
+
+2. Run CMake
+
+**Note:** The process is a little different depending on whether you use the
+CMake GUI or run `cmake.exe` from the terminal.
+
+*For GUI users:*
+
+- Set source code path to `path/to/glslcc/` i.e whichever directory contains
+`CMakeLists.txt` (this should just be wherever you cloned in the 
+previous step).
+- Set the Build path to `path/to/glslcc/build`
+- If the build directory doesn't exist, CMake offers to make it for you. Accept it.
+- Click 'Generate'
+- You will then be able to select the version of Visual Studio you build with
+
+**Warning:** The version of Visual Studio you select **_must_** have the 
+C++ extension installed or CMake won't work!
+
+*For terminal users:*
+
+The command should look something like this:
+
+```
+./cmake -S path/to/glslcc/ -B path/to/glslcc/build
+```
+
+*If you don't include the `-B` flag, the build files will instead be*
+*written to wherever `cmake.exe` is, which you probably don't want*
+
+- If the build directory doesn't exist, CMake will make it automatically for you.
+
+3. Build using Visual Studio
+
+Follow [these](https://docs.microsoft.com/en-us/visualstudio/ide/building-and-cleaning-projects-and-solutions-in-visual-studio?view=vs-2019) 
+steps to build the solution in Visual Studio. The `.sln` file will be in the build dir.
+
+If all goes well, once Visual Studio's done building, you can return to the source
+directory and `glslcc.exe` has been created there (ex: `path/to/glslcc/bin/Debug/glslcc.exe`)
+
+4. Run the executable from the terminal and enjoy!
+See below for further examples of command line args
+
+```
+./glslcc.exe --vert=path/to/shader.vert --frag=path/to/shader.frag --output=path/to/shader.hlsl --lang=hlsl --reflect
+```
+
+#### How to build on Ubuntu
+1. Get the code
+
+```
+git clone https://github.com/septag/glslcc.git
+```
+
+2. `cd` into the directory you just cloned and create the 
+build directory
+
+```
+cd glslcc/
+mkdir build
+```
+
+3. Generate the executable
+
+```
+cmake ../
+make
+```
+
+If all goes well you'll see something like this:
+
+```
+[100%] Linking CXX executable ../../bin/glslcc
+[100%] Built target glslcc
+```
+
+4. `cd` to the folder containing the executable and enjoy!
+See below for further examples of command line args
+
+```
+cd ../bin/
+./glslcc --vert=path/to/shader.vert --frag=path/to/shader.frag --output=path/to/shader.hlsl --lang=hlsl --reflect
+```
+
 ### Usage
 
 I'll have to write a more detailed documentation but for these are the arguments: (```glslcc --help```)
