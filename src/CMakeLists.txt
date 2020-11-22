@@ -35,7 +35,7 @@ endif()
 # static linking
 if (STATIC_LINK AND NOT MSVC)
 	if (CMAKE_BUILD_TYPE STREQUAL Release)
-		set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++ -static")
+		set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
 		#if (APPLE)
 		#	add_custom_command(TARGET glslcc POST_BUILD COMMAND strip -X -x ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/glslcc)
 		#elseif (NOT WIN32)
