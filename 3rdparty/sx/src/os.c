@@ -157,7 +157,8 @@ void* sx_os_dlopen(const char* filepath) {
     sx_unused(filepath);
     return NULL;
 #else
-    return dlopen(filepath, RTLD_LOCAL | RTLD_LAZY);
+    // return dlopen(filepath, RTLD_LOCAL | RTLD_LAZY);
+    return NULL;
 #endif    // SX_PLATFORM_
 }
 
@@ -167,7 +168,7 @@ void sx_os_dlclose(void* handle) {
 #elif SX_PLATFORM_EMSCRIPTEN || SX_PLATFORM_PS4 || SX_PLATFORM_XBOXONE
     sx_unused(handle);
 #else
-    dlclose(handle);
+    // dlclose(handle);
 #endif
 }
 
