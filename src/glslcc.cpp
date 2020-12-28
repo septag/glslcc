@@ -29,6 +29,7 @@
 //      1.7.1       bug fixed in spirv_glsl::emit_header for OpenGL 3+ GLSL shaders
 //      1.7.2       bugs fixed in parsing --defines and --include-dirs flags
 //      1.7.3       Added current file directory to the include-dirs
+//      1.7.4       Added //@begin_vert //@begin_frag //@end tags in .glsl files
 //
 #define _ALLOW_KEYWORD_MACROS
 
@@ -74,7 +75,7 @@
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 7
-#define VERSION_SUB 3
+#define VERSION_SUB 4
 
 static const sx_alloc* g_alloc = sx_alloc_malloc();
 static sgs_file* g_sgs = nullptr;
@@ -1337,6 +1338,8 @@ static int cross_compile(const cmd_args& args, std::vector<uint32_t>& spirv,
 struct compile_file_desc {
     EShLanguage stage;
     const char* filename;
+    uint32_t offset;
+    uint32_t size;
 };
 
 #define compile_files_ret(_code)   \
@@ -1386,7 +1389,7 @@ static bool parse_output_log(const char* str, std::vector<output_parse_result>* 
     return true;
 }
 
-static void output_error(const char* err_str, const cmd_args& args, const char* filename)
+static void output_error(const char* err_str, const cmd_args& args, const char* filename, int start_line = 0)
 {
     if (err_str && err_str[0]) {
         std::vector<output_parse_result> lines;
@@ -1395,25 +1398,27 @@ static void output_error(const char* err_str, const cmd_args& args, const char* 
             fprintf(stdout, "%s\n", filename);
             for (std::vector<output_parse_result>::iterator il = lines.begin();
                  il != lines.end(); ++il) {
-                fprintf(stdout, "ERROR: 0:%d:%s\n", il->line, il->err.c_str());
+                fprintf(stdout, "ERROR: 0:%d:%s\n", il->line + start_line, il->err.c_str());
             }
         } else if (args.err_format == OUTPUT_ERRORFORMAT_MSVC) {
             for (std::vector<output_parse_result>::iterator il = lines.begin();
                  il != lines.end(); ++il) {
                 char fullpath[256];
                 sx_os_path_abspath(fullpath, sizeof(fullpath), il->file.c_str());
-                fprintf(stderr, "%s(%d,0): error:%s\n", fullpath, il->line, il->err.c_str());
+                fprintf(stderr, "%s(%d,0): error:%s\n", fullpath, il->line + start_line, il->err.c_str());
             }
         } else if (args.err_format == OUTPUT_ERRORFORMAT_GCC) {
             for (std::vector<output_parse_result>::iterator il = lines.begin();
                  il != lines.end(); ++il) {
                 char fullpath[256];
                 sx_os_path_abspath(fullpath, sizeof(fullpath), il->file.c_str());
-                fprintf(stderr, "%s:%d:0: error:%s\n", fullpath, il->line, il->err.c_str());
+                fprintf(stderr, "%s:%d:0: error:%s\n", fullpath, il->line + start_line, il->err.c_str());
             }
         }
     }
 }
+
+
 
 static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
 {
@@ -1427,23 +1432,127 @@ static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
         sx_array_free(g_alloc, shaders);
     };
 
+    auto find_end_block = [](const char* text)->const char* {
+        const char* end_block = sx_strstr(text, "//@end");
+        if (end_block) {
+            if (*(end_block - 1) == '\n') {
+                if (!end_block[6] || sx_isspace(end_block[6])) {
+                    return end_block;
+                }
+            }
+            return nullptr;
+        } else {
+            return nullptr;
+        }
+    };
+
+    auto calculate_start_line = [](const char* source, int end_offset)->int
+    {
+        int count = 0;
+        const char* start = source;
+        while (1) {
+            source = sx_strchar(source, '\n');
+            if (source && uintptr_t(source - start) < end_offset) {
+                count++;
+                ++source;
+            } else {
+                break;
+            }
+        }
+        return count;
+    };
+
     glslang::InitializeProcess();
 
     // Gather files for compilation
     compile_file_desc* files = nullptr;
-    if (args.vs_filepath) {
-        compile_file_desc d = { EShLangVertex, args.vs_filepath };
-        sx_array_push(g_alloc, files, d);
-    }
 
-    if (args.fs_filepath) {
-        compile_file_desc d = { EShLangFragment, args.fs_filepath };
-        sx_array_push(g_alloc, files, d);
-    }
+    if ((args.vs_filepath || args.fs_filepath) && args.vs_filepath == args.fs_filepath) {
+        char ext[32];
+        sx_os_path_ext(ext, sizeof(ext), args.vs_filepath);
+        sx_assert(sx_strequalnocase(ext, ".glsl"));
 
-    if (args.cs_filepath) {
-        compile_file_desc d = { EShLangCompute, args.cs_filepath };
-        sx_array_push(g_alloc, files, d);
+        // open the file and check for special tags
+        sx_mem_block* mem = sx_file_load_text(g_alloc, args.vs_filepath);
+        if (!mem) {
+            printf("opening file '%s' failed\n", args.vs_filepath);
+            return -1;
+        }
+
+        const char* text = (const char*)mem->data;
+        text = sx_skip_whitespace(text);
+
+        while (*text) {
+            if (sx_strnequal(text, "//@begin_", 9)) {
+                text += 9;
+                if (sx_strnequal(text, "vert", 4) && (text[4]=='\n' || (text[4]=='\r'&&text[5]=='\n'))) {
+                    text += (text[4]=='\r'&&text[5]=='\n') ? 6 : 5;
+                    const char* end_block = find_end_block(text);
+                    if (!end_block) {
+                        printf("no matching //@end found with //@begin: %s\n", args.vs_filepath);
+                        return -1;
+                    }
+
+                    compile_file_desc d = {
+                        EShLangVertex, 
+                        args.vs_filepath, 
+                        static_cast<uint32_t>(text - (const char*)mem->data),
+                        static_cast<uint32_t>(end_block - text)
+                    };
+                    sx_array_push(g_alloc, files, d);
+
+                    text = end_block + 6;
+                } else if (sx_strnequal(text, "frag", 4) && (text[4]=='\n' || (text[4]=='\r'&&text[5]=='\n'))) {
+                    text += (text[4]=='\r'&&text[5]=='\n') ? 6 : 5;
+                    const char* end_block = find_end_block(text);
+                    if (!end_block) {
+                        printf("no matching //@end found with //@begin: %s\n", args.fs_filepath);
+                        return -1;
+                    }
+                    compile_file_desc d = {
+                        EShLangFragment,
+                        args.vs_filepath,
+                        static_cast<uint32_t>(text - (const char*)mem->data),
+                        static_cast<uint32_t>(end_block - text)
+                    };
+                    sx_array_push(g_alloc, files, d);
+
+                    text = end_block + 6;
+                } else {
+                    printf("invalid @begin tag in '%s'\n", args.vs_filepath);
+                }
+            } 
+            const char* next_text = sx_skip_whitespace(text);
+            if (next_text == text) {
+                break;
+            }
+            text = next_text;
+        } // while(text)
+
+        sx_mem_destroy_block(mem);
+
+        // the offsets should not have any conflict with each other
+        for (int i = 0; i < sx_array_count(files) - 1; i++) {
+            if (files[i].offset + files[i].size > files[i+1].offset) {
+                printf("invalid @begin @end shader blocks: %s\n", args.vs_filepath);
+                return -1;
+            }
+        }
+    } else {
+        if (args.vs_filepath) {
+            compile_file_desc d = { EShLangVertex, args.vs_filepath };
+            sx_array_push(g_alloc, files, d);
+        }
+
+        if (args.fs_filepath) {
+            compile_file_desc d = { EShLangFragment, args.fs_filepath };
+            sx_array_push(g_alloc, files, d);
+        }
+
+        if (args.cs_filepath) {
+            compile_file_desc d = { EShLangCompute, args.cs_filepath };
+            sx_array_push(g_alloc, files, d);
+        }
     }
 
     glslang::TProgram* prog = new (sx_malloc(g_alloc, sizeof(glslang::TProgram))) glslang::TProgram();
@@ -1489,8 +1598,28 @@ static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
         sx_assert(shader);
         sx_array_push(g_alloc, shaders, shader);
 
-        char* shader_str = (char*)mem->data;
-        int shader_len = (int)mem->size;
+        char* shader_str;
+        int shader_len;
+        int start_line = 0;
+        if (files[i].size == 0) {
+            shader_str = (char*)mem->data;
+            shader_len = (int)mem->size;
+        } else {
+            shader_str = (char*)mem->data + files[i].offset;
+            shader_len = (int)files[i].size;
+            start_line = calculate_start_line((const char*)mem->data, files[i].offset);
+
+            #if 0   // TODO: remove later
+            const char* version = "#version 450\n";
+            int version_sz = sx_strlen(version);
+            shader_str = (char*)sx_malloc(g_alloc, files[i].size + version_sz);
+            sx_assert(shader_str);
+            sx_memcpy(shader_str, version, version_sz);
+            sx_memcpy(shader_str + version_sz, (char*)mem->data + files[i].offset, files[i].size);
+            shader_len = files[i].size + version_sz;
+
+            #endif
+        }
         shader->setStringsWithLengthsAndNames(&shader_str, &shader_len, &files[i].filename, 1);
         shader->setInvertY(args.invert_y ? true : false);
         shader->setEnvInput(glslang::EShSourceGlsl, files[i].stage, glslang::EShClientVulkan, default_version);
@@ -1513,13 +1642,13 @@ static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
                 puts(prep_str.c_str());
                 puts("");
             } else {
-                output_error(shader->getInfoLog(), args, files[i].filename);
+                output_error(shader->getInfoLog(), args, files[i].filename, start_line);
                 sx_mem_destroy_block(mem);
                 compile_files_ret(-1);
             }
         } else {
             if (!shader->parse(&limits_conf, default_version, false, messages, includer)) {
-                output_error(shader->getInfoLog(), args, files[i].filename);
+                output_error(shader->getInfoLog(), args, files[i].filename, start_line);
                 sx_mem_destroy_block(mem);
                 compile_files_ret(-1);
             }
@@ -1581,6 +1710,11 @@ static void detect_input_file(cmd_args* args, const char* file)
         args->fs_filepath = file;
     } else if (sx_strequalnocase(ext, ".comp")) {
         args->cs_filepath = file;
+    } else if (sx_strequalnocase(ext, ".glsl")) {
+        // take a wild guess and put it in both args
+        // later, we will look for special tags inside the file to extract the source for each stage
+        args->vs_filepath = file;
+        args->fs_filepath = file;
     }
 }
 

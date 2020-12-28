@@ -18,6 +18,7 @@ It uses [glslang](https://github.com/KhronosGroup/glslang) for parsing GLSL and 
 - Supports both GLES2 and GLES3 shaders
 - Can output to other GLSL versions like 330
 - Optional D3D11 byte code output for HLSL shaders
+- Support for special tags (begin_vert/begin_frag) in a single .glsl file (embed multiple sources)
 
 ### Build
 _glslcc_ uses CMake. built and tested on: 
@@ -42,26 +43,6 @@ git clone https://github.com/septag/glslcc.git
 
 2. Run CMake
 
-**Note:** The process is a little different depending on whether you use the
-CMake GUI or run `cmake.exe` from the terminal.
-
-*For GUI users:*
-
-- Set source code path to `path/to/glslcc/` i.e whichever directory contains
-`CMakeLists.txt` (this should just be wherever you cloned in the 
-previous step).
-- Set the Build path to `path/to/glslcc/build`
-- If the build directory doesn't exist, CMake offers to make it for you. Accept it.
-- Click 'Generate'
-- You will then be able to select the version of Visual Studio you build with
-
-**Warning:** The version of Visual Studio you select **_must_** have the 
-C++ extension installed or CMake won't work!
-
-*For terminal users:*
-
-The command should look something like this:
-
 ```
 ./cmake -S path/to/glslcc/ -B path/to/glslcc/build
 ```
@@ -69,58 +50,11 @@ The command should look something like this:
 *If you don't include the `-B` flag, the build files will instead be*
 *written to wherever `cmake.exe` is, which you probably don't want*
 
-- If the build directory doesn't exist, CMake will make it automatically for you.
-
-3. Build using Visual Studio
-
-Follow [these](https://docs.microsoft.com/en-us/visualstudio/ide/building-and-cleaning-projects-and-solutions-in-visual-studio?view=vs-2019) 
-steps to build the solution in Visual Studio. The `.sln` file will be in the build dir.
-
-If all goes well, once Visual Studio's done building, you can return to the source
-directory and `glslcc.exe` has been created there (ex: `path/to/glslcc/bin/Debug/glslcc.exe`)
-
-4. Run the executable from the terminal and enjoy!
+3. Build and Run the executable from the terminal and enjoy!
 See below for further examples of command line args
 
 ```
 ./glslcc.exe --vert=path/to/shader.vert --frag=path/to/shader.frag --output=path/to/shader.hlsl --lang=hlsl --reflect
-```
-
-#### How to build on Ubuntu
-1. Get the code
-
-```
-git clone https://github.com/septag/glslcc.git
-```
-
-2. `cd` into the directory you just cloned and create the 
-build directory
-
-```
-cd glslcc/
-mkdir build
-```
-
-3. Generate the executable
-
-```
-cmake ../
-make
-```
-
-If all goes well you'll see something like this:
-
-```
-[100%] Linking CXX executable ../../bin/glslcc
-[100%] Built target glslcc
-```
-
-4. `cd` to the folder containing the executable and enjoy!
-See below for further examples of command line args
-
-```
-cd ../bin/
-./glslcc --vert=path/to/shader.vert --frag=path/to/shader.frag --output=path/to/shader.hlsl --lang=hlsl --reflect
 ```
 
 ### Usage
@@ -223,7 +157,7 @@ glslcc --vert=shader.vert --frag=shader.frag --output=shader.hlsl --lang=hlsl --
 This command does the same thing, but outputs all the data to a C header file *shader.h*, with specified variable names *g_shader_vs*, *g_shader_fs*, *g_shader_vs_refl* and *g_shader_fs_refl* which are the same data in files in hex representation. Also sets preprocessor values HLSL=1 and USE_TEXTURE3D=1 for both shaders.
 
 ```
-glslcc --vert=shader.vert --frag=shader.frag --output=shader.h --lang=hlsl --reflect --cvar=g_shader --defines=HLSL:1,USE_TEXTURE3D:1
+glslcc --vert=shader.vert --frag=shader.frag --output=shader.h --lang=hlsl --reflect --cvar=g_shader --defines=HLSL=1;USE_TEXTURE3D=1
 ```
 
 You can also pass files without explicitly defining input shaders in arguments. their shader type will be resolved by checking their file extensions. So `.vert`=vertex-shader, `.frag`=fragment-shader, `.comp`=compute-shader
@@ -236,6 +170,48 @@ To only validate a specific shader (useful for tools and IDEs), use `--validate`
 
 ```
 glslcc shader.vert --validate --err-format=glslang
+```
+
+#### Embed multiple sources into a single file
+To to this, you can use the special tags and write your vertex/fragment sources inside of them. 
+Tags are `//@begin_vert` for vertex shader and `//@begin_frag` for fragment shader. Also remember to end the block with `//@end`. 
+The compiler will extract the blocks and compile each source separately just like individual files. 
+
+**Note** that this only works with *.glsl* files and no other extension:
+
+
+```glsl
+//@begin_vert
+    #version 450
+
+    layout (location = POSITION)  in  vec3 a_pos;
+    layout (location = TEXCOORD0) in  vec2 a_coord;
+    layout (location = TEXCOORD0) out vec2 f_coord;
+
+    layout (binding=0, std140) uniform matrices {
+        mat4 mvp;
+    };
+        
+    void main() {
+        gl_Position = mvp * vec4(a_pos, 1.0);
+        f_coord = a_coord;
+    }
+//@end
+
+//@begin_frag
+    #version 450
+
+    precision mediump float;
+
+    layout (location = TEXCOORD0)  in  vec2 f_coord;
+    layout (location = SV_Target0) out vec4 frag_color;
+
+    layout (binding = 0) uniform sampler2D tex_image;
+
+    void main() {
+        frag_color = texture(tex_image, f_coord);
+    }
+//@end
 ```
 
 #### Reflection data
