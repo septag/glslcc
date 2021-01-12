@@ -8,7 +8,7 @@ It uses [glslang](https://github.com/KhronosGroup/glslang) for parsing GLSL and 
 
 - Currently, vertex, fragment and compute shaders are supported
 - Flatten UBOs, useful for ES2 shaders
-- Show preprocessor result
+- Show preprocessor result, show include files (for resolving shader dependencies in external tools)
 - Add defines
 - Add include directories
 - shader reflection data in Json format
