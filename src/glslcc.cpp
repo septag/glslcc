@@ -30,6 +30,8 @@
 //      1.7.2       bugs fixed in parsing --defines and --include-dirs flags
 //      1.7.3       Added current file directory to the include-dirs
 //      1.7.4       Added //@begin_vert //@begin_frag //@end tags in .glsl files
+//      1.7.5       List include names in the shader with -L argument
+//      1.7.6       Fixed bugs in parse output
 //
 #define _ALLOW_KEYWORD_MACROS
 
@@ -75,7 +77,7 @@
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 7
-#define VERSION_SUB 4
+#define VERSION_SUB 6
 
 static const sx_alloc* g_alloc = sx_alloc_malloc();
 static sgs_file* g_sgs = nullptr;
@@ -201,6 +203,16 @@ static int k_attrib_sem_indices[VERTEX_ATTRIB_COUNT] = {
 // Includer
 class Includer : public glslang::TShader::Includer {
 public:
+    Includer() : glslang::TShader::Includer()
+    {
+        m_listIncludes = false;
+    }
+
+    explicit Includer(bool list_files) : glslang::TShader::Includer()
+    {
+        m_listIncludes = list_files;
+    }
+
     virtual ~Includer() {}
 
     IncludeResult* includeSystem(const char* headerName,
@@ -209,13 +221,16 @@ public:
     {
         for (auto i = m_systemDirs.begin(); i != m_systemDirs.end(); ++i) {
             std::string header_path(*i);
-            if (header_path.back() != '/')
+            if (!header_path.empty() && header_path.back() != '/')
                 header_path += "/";
             header_path += headerName;
 
             if (sx_os_stat(header_path.c_str()).type == SX_FILE_TYPE_REGULAR) {
                 sx_mem_block* mem = sx_file_load_bin(g_alloc, header_path.c_str());
                 if (mem) {
+                    if (m_listIncludes) {
+                        puts(header_path.c_str());
+                    }
                     return new (sx_malloc(g_alloc, sizeof(IncludeResult)))
                         IncludeResult(header_path, (const char*)mem->data, (size_t)mem->size, mem);
                 }
@@ -238,6 +253,9 @@ public:
 
         sx_mem_block* mem = sx_file_load_bin(g_alloc, header_path.c_str());
         if (mem) {
+            if (m_listIncludes) {
+                puts(headerName);
+            }
             return new (sx_malloc(g_alloc, sizeof(IncludeResult)))
                 IncludeResult(header_path, (const char*)mem->data, (size_t)mem->size, mem);
         }
@@ -273,6 +291,7 @@ public:
 
 private:
     std::vector<std::string> m_systemDirs;
+    bool m_listIncludes;
 };
 
 struct cmd_args {
@@ -294,6 +313,7 @@ struct cmd_args {
     int optimize;
     int silent;
     int validate;
+    int list_includes;
     output_error_format err_format;
     const char* cvar;
     const char* reflect_filepath;
@@ -1356,11 +1376,25 @@ struct output_parse_result {
     int line;
 };
 
+static bool parse_output_log_detect_line(const char** str)
+{
+    const char* err_header = "ERROR: ";
+    const char* warn_header = "WARNING: ";
+
+    if (sx_strstr(*str, err_header) == *str) {
+        *str = *str + sx_strlen(err_header);
+        return true;
+    } else if (sx_strstr(*str, warn_header) == *str) {
+        *str = *str + sx_strlen(warn_header);
+        return true;
+    } else {
+        return false;
+    }
+}
+
 static bool parse_output_log(const char* str, std::vector<output_parse_result>* r)
 {
-    const char* header = "ERROR: ";
-    while (sx_strstr(str, header) == str) {
-        str += sx_strlen(header);
+    while (parse_output_log_detect_line(&str)) {
         const char* divider = sx_strchar(str, ':');
         if (!divider)
             return r->size() > 0;
@@ -1628,19 +1662,21 @@ static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
         add_defines(shader, args, def);
 
         std::string prep_str;
-        Includer includer;
+        Includer includer(args.list_includes);
         char cur_file_dir[512];
         sx_os_path_dirname(cur_file_dir, sizeof(cur_file_dir), files[i].filename);
         includer.addSystemDir(cur_file_dir);
         includer.addIncluder(args.includer);
 
-        if (args.preprocess) {
+        if (args.preprocess || args.list_includes) {
             if (shader->preprocess(&limits_conf, default_version, ENoProfile, false, false, messages, &prep_str, includer)) {
-                puts("-------------------");
-                printf("%s:\n", files[i].filename);
-                puts("-------------------");
-                puts(prep_str.c_str());
-                puts("");
+                if (args.preprocess) {
+                    puts("-------------------");
+                    printf("%s:\n", files[i].filename);
+                    puts("-------------------");
+                    puts(prep_str.c_str());
+                    puts("");
+                }
             } else {
                 output_error(shader->getInfoLog(), args, files[i].filename, start_line);
                 sx_mem_destroy_block(mem);
@@ -1661,7 +1697,7 @@ static int compile_files(cmd_args& args, const TBuiltInResource& limits_conf)
     } // foreach (file)
 
     // In preprocess mode, do not link, just exit
-    if (args.preprocess || args.validate) {
+    if (args.preprocess || args.validate || args.list_includes) {
         compile_files_ret(0);
     }
 
@@ -1752,6 +1788,7 @@ int main(int argc, char* argv[])
         { "input", 'i', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'i', "Input shader source file. determined by extension (.vert/.frag/.comp)", 0x0 },
         { "validate", '0', SX_CMDLINE_OPTYPE_FLAG_SET, &args.validate, 1, "Only performs shader validatation and error checking", 0x0 },
         { "err-format", 'E', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'E', "Output error format", "glslang/msvc" },
+        { "list-includes", 'L', SX_CMDLINE_OPTYPE_FLAG_SET, &args.list_includes, 1, "List include files in shaders, does not generate any output files", 0x0},
         SX_CMDLINE_OPT_END
     };
     sx_cmdline_context* cmdline = sx_cmdline_create_context(g_alloc, argc, (const char**)argv, opts);
@@ -1843,12 +1880,12 @@ int main(int argc, char* argv[])
         exit(-1);
     }
 
-    if (args.out_filepath == nullptr && !(args.preprocess | args.validate)) {
+    if (args.out_filepath == nullptr && !(args.preprocess | args.validate | args.list_includes)) {
         puts("Output file is not specified");
         exit(-1);
     }
 
-    if (args.lang == SHADER_LANG_COUNT && !(args.preprocess | args.validate)) {
+    if (args.lang == SHADER_LANG_COUNT && !(args.preprocess | args.validate | args.list_includes)) {
         puts("Shader language is not specified");
         exit(-1);
     }
@@ -1892,7 +1929,7 @@ int main(int argc, char* argv[])
     }
 #endif
 
-    if (args.sgs_file && !(args.preprocess | args.validate)) {
+    if (args.sgs_file && !(args.preprocess | args.validate | args.list_includes)) {
         uint32_t slang = 0;
         switch (args.lang) {
         case SHADER_LANG_GLES:

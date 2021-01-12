@@ -80,16 +80,18 @@ I'll have to write a more detailed documentation but for these are the arguments
 -r --reflect(=Filepath)             - Output shader reflection information to a json file
 -G --sgs                            - Output file should be packed SGS format
 -b --bin                            - Compile to bytecode instead of source. requires ENABLE_D3D11_COMPILER build flag
--g --debug-bin                      - Generate debug info for binary compilation, should come with --bin
+-g --debug                          - Generate debug info for binary compilation, should come with --bin
+-O --optimize                       - Optimize shader for release compilation
 -S --silent                         - Does not output filename(s) after compile success
 -i --input=<(null)>                 - Input shader source file. determined by extension (.vert/.frag/.comp)
 -0 --validate                       - Only performs shader validatation and error checking
 -E --err-format=<glslang/msvc>      - Output error format
+-L --list-includes                  - List include files in shaders, does not generate any output files
 
 Current supported shader stages are:
         - Vertex shader (--vert)
         - Fragment shader (--frag)
-        - Compute shader (--comp)
+        - Compute shader (--compute)
 ```
 
 Here's some examples:  
