@@ -250,12 +250,23 @@ The blocks are composed of a uint32_t fourcc code + uint32_t variable defining t
 			- `struct sgs_refl_texture[]`: array of storage image objects (see `sgs_chunk_refl` for number of storage images)
 			- `struct sgs_refl_buffer[]`: array of storage buffer objects (see `sgs_chunk_refl` for number of storage buffers)
 
-### MSVC integration
+### MSVC Linter
 
 If you happen to work with msvc 2017 and higher, there is this extension called [GLSL language integration](https://marketplace.visualstudio.com/items?itemName=DanielScherzer.GLSL) ([github](https://github.com/danielscherzer/GLSL)) that this compiler is compatible with, so it can perform automating error checking in your editor. use these parameters in extensions's config:  
 
 ```
 glslcc -0 -E glslang
+```
+
+### VSCode Linter
+
+For visual studio code linting, I have modified existing [GLSL Lint](https://marketplace.visualstudio.com/items?itemName=CADENAS.vscode-glsllint) extension to work with this tool instead. you can find it [here](vscode).
+
+Just install the tool manually in vscode, and add these options to vscode:
+
+```
+    "glsllint.glslangValidatorPath": "/path/to/glslcc.exe",
+    "glsllint.glslangValidatorArgs": "--validate --err-format=glslang"
 ```
 
 ### D3D11 Compiler
