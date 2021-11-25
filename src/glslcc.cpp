@@ -701,6 +701,36 @@ static void output_resource_info_json(sjson_context* jctx, sjson_node* jparent,
         return "unknown";
     };
 
+    auto fill_members = [&jctx, &compiler, &resolve_variable_type] (sjson_node* jres, const spirv_cross::SPIRType& type){
+      sjson_node *jmembers = sjson_put_array(jctx, jres, "members");
+      // members
+      int member_idx = 0;
+      for (auto &member_id : type.member_types) {
+        sjson_node *jmember = sjson_mkobject(jctx);
+        auto &member_type = compiler.get_type(member_id);
+
+        sjson_put_string(
+            jctx, jmember, "name",
+            compiler.get_member_name(type.self, member_idx).c_str());
+        sjson_put_string(jctx, jmember, "type",
+                         resolve_variable_type(member_type));
+        sjson_put_int(jctx, jmember, "offset",
+                      compiler.type_struct_member_offset(type, member_idx));
+        sjson_put_int(jctx, jmember, "size",
+                      (int)compiler.get_declared_struct_member_size(
+                          type, member_idx));
+        if (!member_type.array.empty()) {
+          int arr_sz = 0;
+          for (auto arr : member_type.array)
+            arr_sz += arr;
+          sjson_put_int(jctx, jmember, "array", arr_sz);
+        }
+
+        sjson_append_element(jmembers, jmember);
+        member_idx++;
+      }
+    };
+
     for (auto& res : ress) {
         sjson_node* jres = sjson_mkobject(jctx);
         auto& type = compiler.get_type(res.type_id);
@@ -777,34 +807,18 @@ static void output_resource_info_json(sjson_context* jctx, sjson_node* jparent,
         if (res_type == RES_TYPE_SSBO && compiler.buffer_get_hlsl_counter_buffer(res.id, counter_id))
             sjson_put_int(jctx, jres, "hlsl_counter_buffer_id", counter_id);
 
-        // Some extra
+
         if (res_type == RES_TYPE_UNIFORM_BUFFER) {
-            if (flatten_ubos) {
-                sjson_put_string(jctx, jres, "type", "float4");
-                sjson_put_int(jctx, jres, "array", sx_max((int)block_size, 16) / 16);
-            }
+          if (flatten_ubos) {
+            sjson_put_string(jctx, jres, "type", "float4");
+            sjson_put_int(jctx, jres, "array",
+                          sx_max((int)block_size, 16) / 16);
+          }
 
-            sjson_node* jmembers = sjson_put_array(jctx, jres, "members");
-            // members
-            int member_idx = 0;
-            for (auto& member_id : type.member_types) {
-                sjson_node* jmember = sjson_mkobject(jctx);
-                auto& member_type = compiler.get_type(member_id);
+          fill_members(jres, type);
 
-                sjson_put_string(jctx, jmember, "name", compiler.get_member_name(type.self, member_idx).c_str());
-                sjson_put_string(jctx, jmember, "type", resolve_variable_type(member_type));
-                sjson_put_int(jctx, jmember, "offset", compiler.type_struct_member_offset(type, member_idx));
-                sjson_put_int(jctx, jmember, "size", (int)compiler.get_declared_struct_member_size(type, member_idx));
-                if (!member_type.array.empty()) {
-                    int arr_sz = 0;
-                    for (auto arr : member_type.array)
-                        arr_sz += arr;
-                    sjson_put_int(jctx, jmember, "array", arr_sz);
-                }
-
-                sjson_append_element(jmembers, jmember);
-                member_idx++;
-            }
+        } else if(is_push_constant && is_block) {
+          fill_members(jres, type);
         } else if (res_type == RES_TYPE_TEXTURE) {
             sjson_put_string(jctx, jres, "dimension", k_texture_dim_str[type.image.dim]);
             sjson_put_string(jctx, jres, "format", k_texture_format_str[type.image.format]);
